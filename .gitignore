@@ -1,0 +1,25 @@
+# ───── FLUTTER (frontend) ─────
+frontend/build/
+frontend/.dart_tool/
+frontend/.packages
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/android/.gradle/
+frontend/ios/Flutter/Flutter.podspec
+frontend/ios/Pods/
+
+# ───── NODE.JS (backend) ─────
+backend/node_modules/
+backend/.env
+backend/npm-debug.log
+backend/yarn-error.log
+
+# ───── ESP32 (firmware) ─────
+esp32/build/
+esp32/.pio/
+
+# ───── GENERAL SYSTEM FILES (SAFE TO INCLUDE) ─────
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
