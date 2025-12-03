@@ -15,10 +15,14 @@ class MyApp extends StatelessWidget {
       title: 'Smart Parking',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const LoginScreen(), // start at login
+      home: const LoginScreen(),
     );
   }
 }
+
+/* -------------------------------------------------------
+   LOGIN SCREEN
+-------------------------------------------------------- */
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -58,7 +62,6 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text("Welcome, $name")));
 
-      // Navigate to ParkingScreen, pass userId
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ParkingScreen(userId: userId)),
@@ -82,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("Login")),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             TextField(
@@ -112,6 +115,10 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
+/* -------------------------------------------------------
+   REGISTER SCREEN
+-------------------------------------------------------- */
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -149,7 +156,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(res["message"] ?? "Registered")));
-      Navigator.pop(context); // go back to login
+      Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(res["message"] ?? "Registration failed")),
@@ -162,7 +169,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("Register")),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             TextField(
@@ -194,8 +201,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 }
 
+/* -------------------------------------------------------
+   PARKING SCREEN WITH PARKING MAP
+-------------------------------------------------------- */
+
 class ParkingScreen extends StatefulWidget {
   final int userId;
+
   const ParkingScreen({super.key, required this.userId});
 
   @override
@@ -212,14 +224,13 @@ class _ParkingScreenState extends State<ParkingScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSpots(showLoader: true); // initial load
-    _startAutoRefresh(); // start auto-refresh
+    _loadSpots(showLoader: true);
+    _startAutoRefresh();
   }
 
   void _startAutoRefresh() {
-    // refresh every 5 seconds (you can change this)
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _loadSpots(); // do not show big loader every time, just refresh silently
+      _loadSpots();
     });
   }
 
@@ -243,20 +254,18 @@ class _ParkingScreenState extends State<ParkingScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => loading = false);
-      // For debugging
       print("Error loading spots: $e");
     }
   }
 
   Future<void> _reserve(int spotId) async {
     final res = await api.reserveSpot(widget.userId, spotId);
-    if (!mounted) return;
 
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(res['message'] ?? 'Reserved')));
 
-    _loadSpots(); // reload spots after reserving
+    _loadSpots();
   }
 
   void _logout() {
@@ -273,13 +282,12 @@ class _ParkingScreenState extends State<ParkingScreen> {
             ),
             TextButton(
               onPressed: () {
-                Navigator.pop(context); // close dialog
+                Navigator.pop(context);
 
-                // Navigate user back to LoginScreen
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false, // remove all previous screens
+                  (route) => false,
                 );
               },
               child: const Text("Logout"),
@@ -296,70 +304,170 @@ class _ParkingScreenState extends State<ParkingScreen> {
       appBar: AppBar(
         title: const Text("Smart Parking Spots"),
         actions: [
-          // Refresh Button
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              _loadSpots(showLoader: true);
-            },
+            onPressed: () => _loadSpots(showLoader: true),
           ),
-
-          // Popup Menu
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == "logout") {
                 _logout();
               }
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: "logout", child: Text("Logout")),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: "logout", child: Text("Logout")),
             ],
           ),
         ],
       ),
 
+      /* -------- PARKING MAP LAYOUT -------- */
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () => _loadSpots(), // pull-to-refresh
-              child: spots.isEmpty
-                  ? ListView(
-                      // ListView is needed so RefreshIndicator can work even when empty
-                      children: [
-                        SizedBox(height: 200),
-                        Center(child: Text("No parking spots found")),
-                      ],
-                    )
-                  : ListView.builder(
-                      itemCount: spots.length,
-                      itemBuilder: (context, index) {
-                        final s = spots[index];
-                        final isAvailable = s['isAvailable'] == 1;
-
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: ListTile(
-                            title: Text("Spot ${s['spot_number']}"),
-                            subtitle: Text(
-                              isAvailable ? "Available" : "Occupied",
-                            ),
-                            trailing: isAvailable
-                                ? ElevatedButton(
-                                    onPressed: () => _reserve(s['id']),
-                                    child: const Text("Reserve"),
-                                  )
-                                : const Text(
-                                    "Taken",
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                          ),
-                        );
-                      },
+              onRefresh: () => _loadSpots(),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const _SideLabel(
+                      title: "Entrance",
+                      icon: Icons.arrow_forward,
                     ),
+                    const SizedBox(width: 12),
+
+                    Expanded(
+                      child: Center(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.black, width: 2),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: GridView.builder(
+                            shrinkWrap: true, // <<< important
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 5,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                  childAspectRatio: 1, // squares
+                                ),
+                            itemCount: spots.length,
+                            itemBuilder: (context, index) {
+                              final s = spots[index];
+                              final isAvailable = s['isAvailable'] == 1;
+
+                              return GestureDetector(
+                                onTap: isAvailable
+                                    ? () async {
+                                        final reserved = await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ConfirmationPage(
+                                              slotId: s['id'],
+                                            ),
+                                          ),
+                                        );
+                                        if (reserved == true) {
+                                          _reserve(s['id']);
+                                        }
+                                      }
+                                    : null,
+                                child: Container(
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: isAvailable
+                                        ? Colors.green
+                                        : Colors.red,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.black),
+                                  ),
+                                  child: Text(
+                                    "P${s['spot_number']}",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+                    const _SideLabel(title: "Lift", icon: Icons.elevator),
+                  ],
+                ),
+              ),
             ),
+    );
+  }
+}
+
+/* -------------------------------------------------------
+   SIDE LABEL (Entrance / Lift)
+-------------------------------------------------------- */
+
+class _SideLabel extends StatelessWidget {
+  final String title; // no longer used, but can keep for compatibility
+  final IconData icon;
+
+  const _SideLabel({required this.title, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: RotatedBox(
+        quarterTurns: 0, // rotate icon clockwise 90 degrees
+        child: Icon(
+          icon,
+          size: 32,
+          color: Colors.black,
+        ),
+      ),
+    );
+  }
+}
+
+
+/* -------------------------------------------------------
+   CONFIRMATION PAGE
+-------------------------------------------------------- */
+
+class ConfirmationPage extends StatelessWidget {
+  final int slotId;
+
+  const ConfirmationPage({super.key, required this.slotId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Confirm Reservation")),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Reserve parking slot P$slotId?",
+              style: const TextStyle(fontSize: 20),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Reserve"),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
