@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => ParkingScreen(userId: userId)),
+        MaterialPageRoute(builder: (context) => MainMenuScreen(userId: userId)),
       );
     } else {
       ScaffoldMessenger.of(
@@ -194,6 +194,172 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onPressed: _doRegister,
                     child: const Text("Register"),
                   ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------
+   MAIN MENU
+-------------------------------------------------------- */
+class MainMenuScreen extends StatefulWidget {
+  final int userId;
+
+  const MainMenuScreen({super.key, required this.userId});
+
+  @override
+  State<MainMenuScreen> createState() => _MainMenuScreenState();
+}
+
+class _MainMenuScreenState extends State<MainMenuScreen> {
+  void _logout() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Logout"),
+        content: const Text("Are you sure you want to logout?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Main Menu"),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == "logout") _logout();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: "logout", child: Text("Logout")),
+            ],
+          ),
+        ],
+      ),
+
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MallSelectionScreen(userId: widget.userId),
+                  ),
+                );
+              },
+              child: const Padding(
+                padding: EdgeInsets.all(14.0),
+                child: Text("Reserve"),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ReservationListScreen(userId: widget.userId),
+                  ),
+                );
+              },
+              child: const Padding(
+                padding: EdgeInsets.all(14.0),
+                child: Text("Reservations"),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => HistoryScreen(userId: widget.userId),
+                  ),
+                );
+              },
+              child: const Padding(
+                padding: EdgeInsets.all(14.0),
+                child: Text("History"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------
+   MALL SELECTION
+-------------------------------------------------------- */
+class MallSelectionScreen extends StatelessWidget {
+  final int userId;
+
+  const MallSelectionScreen({super.key, required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Select Mall")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ParkingScreen(userId: userId),
+                  ),
+                );
+              },
+              child: const Text("Mall A"),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ParkingScreen(userId: userId),
+                  ),
+                );
+              },
+              child: const Text("Mall B"),
+            ),
           ],
         ),
       ),
@@ -423,16 +589,11 @@ class _SideLabel extends StatelessWidget {
     return Center(
       child: RotatedBox(
         quarterTurns: 0, // rotate icon clockwise 90 degrees
-        child: Icon(
-          icon,
-          size: 32,
-          color: Colors.black,
-        ),
+        child: Icon(icon, size: 32, color: Colors.black),
       ),
     );
   }
 }
-
 
 /* -------------------------------------------------------
    CONFIRMATION PAGE
@@ -467,6 +628,223 @@ class ConfirmationPage extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class ReservationListScreen extends StatefulWidget {
+  final int userId;
+  const ReservationListScreen({super.key, required this.userId});
+
+  @override
+  State<ReservationListScreen> createState() => _ReservationListScreenState();
+}
+
+class _ReservationListScreenState extends State<ReservationListScreen> {
+  final ApiService api = ApiService();
+  List reservations = [];
+  bool loading = true;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReservations();
+  }
+
+  Future<void> _loadReservations() async {
+    setState(() {
+      loading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final data = await api.getUserReservations(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        reservations = data;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        errorMessage = "Failed to load reservations";
+      });
+      print("Error loading reservations: $e");
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  Future<void> _cancel(int reservationId) async {
+    try {
+      final res = await api.cancelReservation(reservationId);
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res["message"] ?? "Reservation cancelled")),
+      );
+
+      _loadReservations();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to cancel reservation")));
+      print("Error cancelling reservation: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("My Reservations")),
+      body: RefreshIndicator(
+        onRefresh: _loadReservations,
+        child: loading
+            ? const Center(child: CircularProgressIndicator())
+            : errorMessage != null
+            ? ListView(
+                children: [
+                  const SizedBox(height: 100),
+                  Center(child: Text(errorMessage!)),
+                ],
+              )
+            : reservations.isEmpty
+            ? ListView(
+                children: const [
+                  SizedBox(height: 100),
+                  Center(
+                    child: Text(
+                      "No reservations found",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : ListView.builder(
+                itemCount: reservations.length,
+                itemBuilder: (context, index) {
+                  final r = reservations[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    child: ListTile(
+                      title: Text("Spot P${r['spot_id']}"),
+                      subtitle: Text("Status: ${r['status']}"),
+                      trailing: ElevatedButton(
+                        onPressed: () => _cancel(r['id']),
+                        child: const Text("Cancel"),
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
+
+class HistoryScreen extends StatefulWidget {
+  final int userId;
+  const HistoryScreen({super.key, required this.userId});
+
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  final ApiService api = ApiService();
+  List history = [];
+  bool loading = true;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() {
+      loading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final data = await api.getHistory(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        history = data;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        errorMessage = "Failed to load history";
+      });
+      print("Error loading history: $e");
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Parking History")),
+      body: RefreshIndicator(
+        onRefresh: _loadHistory,
+        child: loading
+            ? const Center(child: CircularProgressIndicator())
+            : errorMessage != null
+            ? ListView(
+                children: [
+                  const SizedBox(height: 100),
+                  Center(child: Text(errorMessage!)),
+                ],
+              )
+            : history.isEmpty
+            ? ListView(
+                children: const [
+                  SizedBox(height: 100),
+                  Center(
+                    child: Text(
+                      "No history found",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : ListView.builder(
+                itemCount: history.length,
+                itemBuilder: (context, index) {
+                  final h = history[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    child: ListTile(
+                      title: Text("Spot P${h['spot_id']}"),
+                      subtitle: Text("Completed: ${h['created_at']}"),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
