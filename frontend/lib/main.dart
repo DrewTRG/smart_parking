@@ -340,25 +340,23 @@ class MallSelectionScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ParkingScreen(userId: userId),
+                    builder: (_) => ParkingScreen(userId: userId, mallId: 1),
                   ),
                 );
               },
-              child: const Text("Mall A"),
+              child: Text("Mall A"),
             ),
-
-            const SizedBox(height: 20),
 
             ElevatedButton(
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ParkingScreen(userId: userId),
+                    builder: (_) => ParkingScreen(userId: userId, mallId: 2),
                   ),
                 );
               },
-              child: const Text("Mall B"),
+              child: Text("Mall B"),
             ),
           ],
         ),
@@ -373,8 +371,9 @@ class MallSelectionScreen extends StatelessWidget {
 
 class ParkingScreen extends StatefulWidget {
   final int userId;
+  final int mallId;
 
-  const ParkingScreen({super.key, required this.userId});
+  const ParkingScreen({super.key, required this.userId, required this.mallId});
 
   @override
   State<ParkingScreen> createState() => _ParkingScreenState();
@@ -390,13 +389,14 @@ class _ParkingScreenState extends State<ParkingScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSpots(showLoader: true);
+    _loadSpots(widget.mallId, showLoader: true);
     _startAutoRefresh();
   }
 
   void _startAutoRefresh() {
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _loadSpots();
+      _loadSpots(widget.mallId);
+      ;
     });
   }
 
@@ -406,32 +406,34 @@ class _ParkingScreenState extends State<ParkingScreen> {
     super.dispose();
   }
 
-  Future<void> _loadSpots({bool showLoader = false}) async {
+  Future<void> _loadSpots(int mallId, {bool showLoader = false}) async {
     if (showLoader) {
       setState(() => loading = true);
     }
+
     try {
-      final data = await api.getSpots();
+      final data = await api.getSpots(mallId);
       if (!mounted) return;
+
       setState(() {
         spots = data;
         loading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => loading = false);
       print("Error loading spots: $e");
+      setState(() => loading = false);
     }
   }
 
   Future<void> _reserve(int spotId) async {
-    final res = await api.reserveSpot(widget.userId, spotId);
+    final res = await api.reserveSpot(widget.userId, spotId, widget.mallId);
 
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(res['message'] ?? 'Reserved')));
 
-    _loadSpots();
+    _loadSpots(widget.mallId);
   }
 
   void _logout() {
@@ -472,7 +474,7 @@ class _ParkingScreenState extends State<ParkingScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => _loadSpots(showLoader: true),
+            onPressed: () => _loadSpots(widget.mallId, showLoader: true),
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -491,7 +493,7 @@ class _ParkingScreenState extends State<ParkingScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () => _loadSpots(),
+              onRefresh: () => _loadSpots(widget.mallId),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -531,7 +533,8 @@ class _ParkingScreenState extends State<ParkingScreen> {
                                           context,
                                           MaterialPageRoute(
                                             builder: (_) => ConfirmationPage(
-                                              slotId: s['id'],
+                                              spotId: s['id'],
+                                              spotNumber: s['spot_number'],
                                             ),
                                           ),
                                         );
@@ -600,9 +603,14 @@ class _SideLabel extends StatelessWidget {
 -------------------------------------------------------- */
 
 class ConfirmationPage extends StatelessWidget {
-  final int slotId;
+  final int spotId;
+  final int spotNumber;
 
-  const ConfirmationPage({super.key, required this.slotId});
+  const ConfirmationPage({
+    super.key,
+    required this.spotId,
+    required this.spotNumber,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -613,7 +621,7 @@ class ConfirmationPage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              "Reserve parking slot P$slotId?",
+              "Reserve parking slot P$spotNumber?",
               style: const TextStyle(fontSize: 20),
             ),
             const SizedBox(height: 20),
@@ -738,8 +746,10 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                       vertical: 6,
                     ),
                     child: ListTile(
-                      title: Text("Spot P${r['spot_id']}"),
-                      subtitle: Text("Status: ${r['status']}"),
+                      title: Text("Spot P${r['spot_number']}"),
+                      subtitle: Text(
+                        "Mall: ${r['mall_id'] == 1 ? 'Mall A' : 'Mall B'}\nStatus: ${r['status']}",
+                      ),
                       trailing: ElevatedButton(
                         onPressed: () => _cancel(r['id']),
                         child: const Text("Cancel"),
@@ -766,6 +776,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List history = [];
   bool loading = true;
   String? errorMessage;
+
+  String cleanDate(String iso) {
+  if (iso == null) return "";
+  return iso.replaceFirst("T", " ").replaceFirst(".000Z", "");
+}
 
   @override
   void initState() {
@@ -839,8 +854,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       vertical: 6,
                     ),
                     child: ListTile(
-                      title: Text("Spot P${h['spot_id']}"),
-                      subtitle: Text("Completed: ${h['created_at']}"),
+                      title: Text("Spot P${h['spot_number']}"),
+                      subtitle: Text(
+                        "Mall: ${h['mall_id'] == 1 ? 'Mall A' : 'Mall B'}\n"
+                        "Status: ${h['status']}\n"
+                        "Date: ${cleanDate(h['created_at'])}",
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () async {
+                          final res = await api.deleteHistory(h['id']);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(res['message'] ?? "Deleted"),
+                            ),
+                          );
+
+                          _loadHistory(); // refresh UI
+                        },
+                      ),
                     ),
                   );
                 },

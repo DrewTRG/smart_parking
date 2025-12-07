@@ -11,7 +11,7 @@ app.use(express.json());
 const db = mysql.createConnection({
     host: "localhost",
     user: "root",
-    password: "",         
+    password: "",
     database: "smartspot"
 });
 
@@ -29,23 +29,26 @@ app.get("/", (req, res) => {
 });
 
 // Get all parking spots
-app.get("/spots", (req, res) => {
-    db.query("SELECT * FROM parking_spots", (err, results) => {
-        if (err) {
-            return res.json({ success: false, error: err });
-        }
+app.get("/spots/:mallId", (req, res) => {
+    const mallId = req.params.mallId;
+
+    const sql = "SELECT * FROM parking_spots WHERE mall_id = ?";
+    db.query(sql, [mallId], (err, results) => {
+        if (err) return res.json({ success: false, error: err });
+
         res.json({ success: true, spots: results });
     });
 });
 
+
 // Reserve a parking spot
 app.post("/reserve", (req, res) => {
-    const { userId, spotId } = req.body;
+    const { userId, spotId, mallId } = req.body;
 
     const insertSql =
-        "INSERT INTO reservations (user_id, spot_id, status) VALUES (?, ?, 'reserved')";
+        "INSERT INTO reservations (user_id, spot_id, mall_id, status) VALUES (?, ?, ?, 'reserved')";
 
-    db.query(insertSql, [userId, spotId], (err, result) => {
+    db.query(insertSql, [userId, spotId, mallId], (err, result) => {
         if (err) {
             return res.json({ success: false, error: err });
         }
@@ -142,9 +145,16 @@ app.get("/reservations/:userId", (req, res) => {
     const userId = req.params.userId;
 
     const sql = `
-        SELECT * FROM reservations
-        WHERE user_id = ? AND status = 'reserved'
-        ORDER BY created_at DESC
+        SELECT reservations.id,
+               reservations.status,
+               reservations.created_at,
+               reservations.spot_id,
+               reservations.mall_id,
+               parking_spots.spot_number
+        FROM reservations
+        JOIN parking_spots ON reservations.spot_id = parking_spots.id
+        WHERE reservations.user_id = ? AND reservations.status = 'reserved'
+        ORDER BY reservations.created_at DESC
     `;
 
     db.query(sql, [userId], (err, results) => {
@@ -201,10 +211,19 @@ app.get("/history/:userId", (req, res) => {
     const userId = req.params.userId;
 
     const sql = `
-        SELECT * FROM reservations
-        WHERE user_id = ? AND status = 'completed'
-        ORDER BY created_at DESC
-    `;
+    SELECT 
+        reservations.id,
+        reservations.status,
+        reservations.created_at,
+        reservations.mall_id,
+        parking_spots.spot_number
+    FROM reservations
+    JOIN parking_spots 
+        ON reservations.spot_id = parking_spots.id
+    WHERE reservations.user_id = ?
+      AND reservations.status IN ('completed', 'cancelled')
+    ORDER BY reservations.created_at DESC
+`;
 
     db.query(sql, [userId], (err, results) => {
         if (err) return res.json({ success: false, error: err });
@@ -212,6 +231,24 @@ app.get("/history/:userId", (req, res) => {
         res.json({
             success: true,
             history: results
+        });
+    });
+});
+
+app.post("/deleteHistory", (req, res) => {
+    const { reservationId } = req.body;
+
+    const sql = `
+        DELETE FROM reservations
+        WHERE id = ? AND status IN ('completed', 'cancelled')
+    `;
+
+    db.query(sql, [reservationId], (err, result) => {
+        if (err) return res.json({ success: false, error: err });
+
+        return res.json({
+            success: true,
+            message: "History entry deleted"
         });
     });
 });

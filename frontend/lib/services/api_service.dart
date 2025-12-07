@@ -8,17 +8,21 @@ class ApiService {
      PARKING SPOTS
   -------------------------------------------------------------- */
 
-  Future<List<dynamic>> getSpots() async {
-    final response = await http.get(Uri.parse("$baseUrl/spots"));
+  Future<List<dynamic>> getSpots(int mallId) async {
+    final response = await http.get(Uri.parse("$baseUrl/spots/$mallId"));
     final data = jsonDecode(response.body);
     return data["spots"];
   }
 
-  Future<Map<String, dynamic>> reserveSpot(int userId, int spotId) async {
+  Future<Map<String, dynamic>> reserveSpot(
+    int userId,
+    int spotId,
+    int mallId,
+  ) async {
     final response = await http.post(
       Uri.parse("$baseUrl/reserve"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"userId": userId, "spotId": spotId}),
+      body: jsonEncode({"userId": userId, "spotId": spotId, "mallId": mallId}),
     );
     return jsonDecode(response.body);
   }
@@ -28,15 +32,14 @@ class ApiService {
   -------------------------------------------------------------- */
 
   Future<Map<String, dynamic>> register(
-      String name, String email, String password) async {
+    String name,
+    String email,
+    String password,
+  ) async {
     final response = await http.post(
       Uri.parse("$baseUrl/register"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "name": name,
-        "email": email,
-        "password": password,
-      }),
+      body: jsonEncode({"name": name, "email": email, "password": password}),
     );
     return jsonDecode(response.body);
   }
@@ -45,10 +48,7 @@ class ApiService {
     final response = await http.post(
       Uri.parse("$baseUrl/login"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "email": email,
-        "password": password,
-      }),
+      body: jsonEncode({"email": email, "password": password}),
     );
     return jsonDecode(response.body);
   }
@@ -58,9 +58,7 @@ class ApiService {
   -------------------------------------------------------------- */
 
   Future<List<dynamic>> getUserReservations(int userId) async {
-    final response = await http.get(
-      Uri.parse("$baseUrl/reservations/$userId"),
-    );
+    final response = await http.get(Uri.parse("$baseUrl/reservations/$userId"));
 
     final data = jsonDecode(response.body);
     return data["reservations"] ?? [];
@@ -85,13 +83,23 @@ class ApiService {
   -------------------------------------------------------------- */
 
   Future<List<dynamic>> getHistory(int userId) async {
-    final response = await http.get(
-      Uri.parse("$baseUrl/history/$userId"),
-    );
+    final response = await http.get(Uri.parse("$baseUrl/history/$userId"));
 
     final data = jsonDecode(response.body);
     return data["history"] ?? [];
   }
+
+  /* --------------------------------------------------------------
+     DELETE HISTORY
+  -------------------------------------------------------------- */
+Future<Map<String, dynamic>> deleteHistory(int reservationId) async {
+  final response = await http.post(
+    Uri.parse("$baseUrl/deleteHistory"),
+    headers: {"Content-Type": "application/json"},
+    body: jsonEncode({"reservationId": reservationId}),
+  );
+  return jsonDecode(response.body);
+}
 
   /* --------------------------------------------------------------
      MARK RESERVATION COMPLETED
