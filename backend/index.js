@@ -145,15 +145,16 @@ app.get("/reservations/:userId", (req, res) => {
     const userId = req.params.userId;
 
     const sql = `
-        SELECT reservations.id,
-               reservations.status,
-               reservations.created_at,
-               reservations.spot_id,
-               reservations.mall_id,
-               parking_spots.spot_number
+        SELECT 
+            reservations.id,
+            reservations.status,
+            reservations.created_at,
+            reservations.mall_id,
+            parking_spots.spot_number
         FROM reservations
         JOIN parking_spots ON reservations.spot_id = parking_spots.id
-        WHERE reservations.user_id = ? AND reservations.status = 'reserved'
+        WHERE reservations.user_id = ?
+          AND reservations.status IN ('reserved', 'occupied')
         ORDER BY reservations.created_at DESC
     `;
 
@@ -163,6 +164,70 @@ app.get("/reservations/:userId", (req, res) => {
         res.json({
             success: true,
             reservations: results
+        });
+    });
+});
+
+app.post("/arrive", (req, res) => {
+    const { reservationId } = req.body;
+
+    const sql = `
+        UPDATE reservations
+        SET status = 'occupied'
+        WHERE id = ?
+    `;
+
+    db.query(sql, [reservationId], (err) => {
+        if (err) return res.json({ success: false, error: err });
+
+        // FUTURE ESP32 HOOK:
+        // axios.get("http://esp32-ip/openGate");
+
+        res.json({
+            success: true,
+            message: "Arrival registered. Barrier will open (future ESP32)."
+        });
+    });
+});
+
+app.post("/leave", (req, res) => {
+    const { reservationId } = req.body;
+
+    const findSql = "SELECT spot_id FROM reservations WHERE id = ?";
+
+    db.query(findSql, [reservationId], (err, rows) => {
+        if (err || rows.length === 0) {
+            return res.json({ success: false, message: "Reservation not found" });
+        }
+
+        const spotId = rows[0].spot_id;
+
+        const completeSql = `
+            UPDATE reservations
+            SET status = 'completed'
+            WHERE id = ?
+        `;
+
+        db.query(completeSql, [reservationId], (err2) => {
+            if (err2) return res.json({ success: false, error: err2 });
+
+            const freeSql = `
+                UPDATE parking_spots
+                SET isAvailable = 1
+                WHERE id = ?
+            `;
+
+            db.query(freeSql, [spotId], (err3) => {
+                if (err3) return res.json({ success: false, error: err3 });
+
+                // FUTURE ESP32 HOOK:
+                // axios.get("http://esp32-ip/openExitGate");
+
+                res.json({
+                    success: true,
+                    message: "Parking session completed. Spot is now available."
+                });
+            });
         });
     });
 });

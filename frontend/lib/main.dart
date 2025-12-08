@@ -498,77 +498,109 @@ class _ParkingScreenState extends State<ParkingScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    const _SideLabel(
-                      title: "Entrance",
-                      icon: Icons.arrow_forward,
+                    // ----------- ENTRANCE (LEFT) -----------
+                    Padding(
+                      padding: const EdgeInsets.only(top: 30), // move it down
+                      child: const _SideLabel(
+                        title: "Entrance",
+                        icon: Icons.arrow_forward,
+                      ),
                     ),
                     const SizedBox(width: 12),
 
+                    // ----------- CENTER COLUMN: EXIT + GRID -----------
                     Expanded(
-                      child: Center(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.black, width: 2),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // EXIT ICON AT TOP
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: _TopLabel(
+                              title: "Exit",
+                              icon: Icons.exit_to_app,
+                            ),
                           ),
-                          padding: const EdgeInsets.all(12),
-                          child: GridView.builder(
-                            shrinkWrap: true, // <<< important
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 5,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                  childAspectRatio: 1, // squares
-                                ),
-                            itemCount: spots.length,
-                            itemBuilder: (context, index) {
-                              final s = spots[index];
-                              final isAvailable = s['isAvailable'] == 1;
 
-                              return GestureDetector(
-                                onTap: isAvailable
-                                    ? () async {
-                                        final reserved = await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => ConfirmationPage(
-                                              spotId: s['id'],
-                                              spotNumber: s['spot_number'],
-                                            ),
-                                          ),
-                                        );
-                                        if (reserved == true) {
-                                          _reserve(s['id']);
-                                        }
-                                      }
-                                    : null,
-                                child: Container(
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: isAvailable
-                                        ? Colors.green
-                                        : Colors.red,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.black),
-                                  ),
-                                  child: Text(
-                                    "P${s['spot_number']}",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                          // PARKING GRID
+                          Center(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Colors.black,
+                                  width: 2,
                                 ),
-                              );
-                            },
+                              ),
+                              padding: const EdgeInsets.all(12),
+                              child: GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 5,
+                                      crossAxisSpacing: 10,
+                                      mainAxisSpacing: 10,
+                                      childAspectRatio: 1,
+                                    ),
+                                itemCount: spots.length,
+                                itemBuilder: (context, index) {
+                                  final s = spots[index];
+                                  final isAvailable = s['isAvailable'] == 1;
+
+                                  return GestureDetector(
+                                    onTap: isAvailable
+                                        ? () async {
+                                            final reserved =
+                                                await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        ConfirmationPage(
+                                                          spotId: s['id'],
+                                                          spotNumber:
+                                                              s['spot_number'],
+                                                        ),
+                                                  ),
+                                                );
+                                            if (reserved == true) {
+                                              _reserve(s['id']);
+                                            }
+                                          }
+                                        : null,
+                                    child: Container(
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: isAvailable
+                                            ? Colors.green
+                                            : Colors.red,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.black),
+                                      ),
+                                      child: Text(
+                                        "P${s['spot_number']}",
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
 
                     const SizedBox(width: 12),
-                    const _SideLabel(title: "Lift", icon: Icons.elevator),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 30), // same offset
+                      child: const _SideLabel(
+                        title: "Lift",
+                        icon: Icons.elevator,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -594,6 +626,31 @@ class _SideLabel extends StatelessWidget {
         quarterTurns: 0, // rotate icon clockwise 90 degrees
         child: Icon(icon, size: 32, color: Colors.black),
       ),
+    );
+  }
+}
+
+/* -------------------------------------------------------
+   TOP LABEL (Exit)
+-------------------------------------------------------- */
+class _TopLabel extends StatelessWidget {
+  final String title;
+  final IconData icon;
+
+  const _TopLabel({required this.title, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 28, color: Colors.black),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+      ],
     );
   }
 }
@@ -750,9 +807,63 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                       subtitle: Text(
                         "Mall: ${r['mall_id'] == 1 ? 'Mall A' : 'Mall B'}\nStatus: ${r['status']}",
                       ),
-                      trailing: ElevatedButton(
-                        onPressed: () => _cancel(r['id']),
-                        child: const Text("Cancel"),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ---------- RESERVED ----------
+                          if (r['status'] == 'reserved') ...[
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              onPressed: () => _cancel(r['id']),
+                              child: const Text("Cancel"),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                              ),
+                              onPressed: () async {
+                                final res = await api.arrive(r['id']);
+
+                                if (!mounted) return;
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(res['message'] ?? "Arrived"),
+                                  ),
+                                );
+
+                                _loadReservations();
+                              },
+                              child: const Text("Arrive"),
+                            ),
+                          ],
+
+                          // ---------- OCCUPIED ----------
+                          if (r['status'] == 'occupied') ...[
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                              ),
+                              onPressed: () async {
+                                final res = await api.leave(r['id']);
+
+                                if (!mounted) return;
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(res['message'] ?? "Left"),
+                                  ),
+                                );
+
+                                _loadReservations();
+                              },
+                              child: const Text("Leave"),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   );
@@ -778,9 +889,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String? errorMessage;
 
   String cleanDate(String iso) {
-  if (iso == null) return "";
-  return iso.replaceFirst("T", " ").replaceFirst(".000Z", "");
-}
+    if (iso == null) return "";
+    return iso.replaceFirst("T", " ").replaceFirst(".000Z", "");
+  }
 
   @override
   void initState() {

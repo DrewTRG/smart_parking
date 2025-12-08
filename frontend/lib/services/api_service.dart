@@ -64,6 +64,34 @@ class ApiService {
     return data["reservations"] ?? [];
   }
 
+  // --------------------------------------------------
+  // Mark reservation as "occupied" (user arrived)
+  // POST /arrive
+  // --------------------------------------------------
+  Future<Map<String, dynamic>> arrive(int reservationId) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/arrive"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"reservationId": reservationId}),
+    );
+
+    return jsonDecode(response.body);
+  }
+
+  // --------------------------------------------------
+  // Mark reservation as "completed" and free the spot
+  // POST /leave
+  // --------------------------------------------------
+  Future<Map<String, dynamic>> leave(int reservationId) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/leave"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"reservationId": reservationId}),
+    );
+
+    return jsonDecode(response.body);
+  }
+
   /* --------------------------------------------------------------
      CANCEL RESERVATION
   -------------------------------------------------------------- */
