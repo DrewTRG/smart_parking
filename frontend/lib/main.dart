@@ -385,12 +385,73 @@ class _ParkingScreenState extends State<ParkingScreen> {
   bool loading = true;
 
   Timer? _autoRefreshTimer;
+  bool _hasShownInitialRate = false;
+
+  //Parking rate text based on mallId
+  String _getRateText() {
+    if (widget.mallId == 1) {
+      return """
+Mall A Parking Rates
+
+Weekdays:
+- RM 3.00 for the first hour
+- RM 2.00 per subsequent hour
+
+Weekends:
+- RM 3.00 for the first 2 hours
+- RM 2.00 per subsequent hour
+""";
+    } else if (widget.mallId == 2) {
+      return """
+Mall B Parking Rates
+
+Weekdays:
+- RM 4.00 for the first 2 hours
+- RM 2.00 per subsequent hour
+
+Weekends:
+- RM 3.00 for the first hour
+- RM 2.00 per subsequent hour
+""";
+    } else {
+      return "Parking rate information is not available for this mall.";
+    }
+  }
+
+  void _showRateDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          // Custom title with X button
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Parking Rates"),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          content: Text(_getRateText(), style: const TextStyle(fontSize: 14)),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     _loadSpots(widget.mallId, showLoader: true);
     _startAutoRefresh();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_hasShownInitialRate) {
+        _hasShownInitialRate = true;
+        _showRateDialog();
+      }
+    });
   }
 
   void _startAutoRefresh() {
@@ -436,36 +497,6 @@ class _ParkingScreenState extends State<ParkingScreen> {
     _loadSpots(widget.mallId);
   }
 
-  void _logout() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Logout"),
-          content: const Text("Are you sure you want to logout?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              },
-              child: const Text("Logout"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -476,16 +507,6 @@ class _ParkingScreenState extends State<ParkingScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: () => _loadSpots(widget.mallId, showLoader: true),
           ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == "logout") {
-                _logout();
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: "logout", child: Text("Logout")),
-            ],
-          ),
         ],
       ),
 
@@ -494,114 +515,141 @@ class _ParkingScreenState extends State<ParkingScreen> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: () => _loadSpots(widget.mallId),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // ----------- ENTRANCE (LEFT) -----------
-                    Padding(
-                      padding: const EdgeInsets.only(top: 30), // move it down
-                      child: const _SideLabel(
-                        title: "Entrance",
-                        icon: Icons.arrow_forward,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // --------- Parking Rate button (top-right) ----------
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          right: 8.0,
+                          top: 8.0,
+                          bottom: 35,
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton.icon(
+                            onPressed: _showRateDialog,
+                            icon: const Icon(Icons.info_outline),
+                            label: const Text("Parking Rate"),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
 
-                    // ----------- CENTER COLUMN: EXIT + GRID -----------
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                      const SizedBox(height: 12),
+
+                      // --------- Original row with side labels + map ---------
+                      Row(
                         children: [
-                          // EXIT ICON AT TOP
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 12),
-                            child: _TopLabel(
-                              title: "Exit",
-                              icon: Icons.exit_to_app,
+                          Padding(
+                            padding: const EdgeInsets.only(top: 30),
+                            child: const _SideLabel(
+                              title: "Entrance",
+                              icon: Icons.arrow_forward,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.only(bottom: 12),
+                                  child: _TopLabel(
+                                    title: "Exit",
+                                    icon: Icons.exit_to_app,
+                                  ),
+                                ),
+                                Center(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Colors.black,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.all(12),
+                                    child: GridView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 5,
+                                            crossAxisSpacing: 10,
+                                            mainAxisSpacing: 10,
+                                            childAspectRatio: 1,
+                                          ),
+                                      itemCount: spots.length,
+                                      itemBuilder: (context, index) {
+                                        final s = spots[index];
+                                        final isAvailable =
+                                            s['isAvailable'] == 1;
+
+                                        return GestureDetector(
+                                          onTap: isAvailable
+                                              ? () async {
+                                                  final reserved =
+                                                      await Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (_) =>
+                                                              ConfirmationPage(
+                                                                spotId: s['id'],
+                                                                spotNumber:
+                                                                    s['spot_number'],
+                                                              ),
+                                                        ),
+                                                      );
+                                                  if (reserved == true) {
+                                                    _reserve(s['id']);
+                                                  }
+                                                }
+                                              : null,
+                                          child: Container(
+                                            alignment: Alignment.center,
+                                            decoration: BoxDecoration(
+                                              color: isAvailable
+                                                  ? Colors.green
+                                                  : Colors.red,
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              border: Border.all(
+                                                color: Colors.black,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              "P${s['spot_number']}",
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 
-                          // PARKING GRID
-                          Center(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: Colors.black,
-                                  width: 2,
-                                ),
-                              ),
-                              padding: const EdgeInsets.all(12),
-                              child: GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 5,
-                                      crossAxisSpacing: 10,
-                                      mainAxisSpacing: 10,
-                                      childAspectRatio: 1,
-                                    ),
-                                itemCount: spots.length,
-                                itemBuilder: (context, index) {
-                                  final s = spots[index];
-                                  final isAvailable = s['isAvailable'] == 1;
-
-                                  return GestureDetector(
-                                    onTap: isAvailable
-                                        ? () async {
-                                            final reserved =
-                                                await Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        ConfirmationPage(
-                                                          spotId: s['id'],
-                                                          spotNumber:
-                                                              s['spot_number'],
-                                                        ),
-                                                  ),
-                                                );
-                                            if (reserved == true) {
-                                              _reserve(s['id']);
-                                            }
-                                          }
-                                        : null,
-                                    child: Container(
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: isAvailable
-                                            ? Colors.green
-                                            : Colors.red,
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: Colors.black),
-                                      ),
-                                      child: Text(
-                                        "P${s['spot_number']}",
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                          const SizedBox(width: 12),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 30),
+                            child: const _SideLabel(
+                              title: "Lift",
+                              icon: Icons.elevator,
                             ),
                           ),
                         ],
                       ),
-                    ),
-
-                    const SizedBox(width: 12),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 30), // same offset
-                      child: const _SideLabel(
-                        title: "Lift",
-                        icon: Icons.elevator,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
