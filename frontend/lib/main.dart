@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
@@ -746,6 +747,217 @@ class ConfirmationPage extends StatelessWidget {
   }
 }
 
+/* -------------------------------------------------------
+   DURATION SELECTION PAGE (After pressing ARRIVE)
+-------------------------------------------------------- */
+
+class SelectDurationPage extends StatelessWidget {
+  final int reservationId;
+  final int mallId;
+
+  const SelectDurationPage({
+    super.key,
+    required this.reservationId,
+    required this.mallId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Select Parking Duration")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            for (int hours = 1; hours <= 5; hours++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ElevatedButton(
+                  onPressed: () async {
+                    // ✅ make it async
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PaymentSummaryPage(
+                          reservationId: reservationId,
+                          mallId: mallId,
+                          hours: hours,
+                        ),
+                      ),
+                    );
+
+                    if (result == true) {
+                      // send success back to ReservationListScreen
+                      Navigator.pop(context, true);
+                    }
+                  },
+                  child: Text("$hours Hour${hours > 1 ? 's' : ''}"),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------
+   PRICE CALCULATION LOGIC
+-------------------------------------------------------- */
+
+double calculateParkingFee(int mallId, int hours) {
+  final weekday = DateTime.now().weekday;
+  final isWeekend = (weekday == 6 || weekday == 7);
+
+  double total = 0;
+
+  if (mallId == 1) {
+    // Mall A
+    if (!isWeekend) {
+      total = 3 + (hours - 1) * 2;
+    } else {
+      if (hours == 1) total = 3;
+      if (hours >= 2) total = 3 + 3 + (hours - 2) * 2;
+    }
+  } else {
+    // Mall B
+    if (!isWeekend) {
+      if (hours == 1) total = 4;
+      if (hours >= 2) total = 4 + 4 + (hours - 2) * 2;
+    } else {
+      total = 3 + (hours - 1) * 2;
+    }
+  }
+
+  return total;
+}
+
+/* -------------------------------------------------------
+   PAYMENT SUMMARY PAGE
+-------------------------------------------------------- */
+
+class PaymentSummaryPage extends StatefulWidget {
+  final int reservationId;
+  final int mallId;
+  final int hours;
+
+  const PaymentSummaryPage({
+    super.key,
+    required this.reservationId,
+    required this.mallId,
+    required this.hours,
+  });
+
+  @override
+  State<PaymentSummaryPage> createState() => _PaymentSummaryPageState();
+}
+
+class _PaymentSummaryPageState extends State<PaymentSummaryPage> {
+  String paymentMethod = "Online Banking";
+
+  Future<void> _openPaymentApp() async {
+    Uri uri;
+
+    if (paymentMethod == "Online Banking") {
+      uri = Uri.parse("https://www.cimbclicks.com.my");
+    } else if (paymentMethod == "Touch N Go") {
+      uri = Uri.parse("https://prod.tngdigital.com.my/pay");
+    } else {
+      uri = Uri.parse("https://visa.com");
+    }
+
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fee = calculateParkingFee(widget.mallId, widget.hours);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("Payment Summary")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Parking Duration: ${widget.hours} hour(s)",
+              style: const TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Total Fee: RM${fee.toStringAsFixed(2)}",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+
+            const Text("Payment Method"),
+            const SizedBox(height: 8),
+
+            DropdownButton<String>(
+              value: paymentMethod,
+              items: const [
+                DropdownMenuItem(
+                  value: "Online Banking",
+                  child: Text("Online Banking"),
+                ),
+                DropdownMenuItem(
+                  value: "Credit Card",
+                  child: Text("Credit Card"),
+                ),
+                DropdownMenuItem(
+                  value: "Touch N Go",
+                  child: Text("Touch 'n Go"),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() => paymentMethod = value!);
+              },
+            ),
+
+            const Spacer(),
+
+            Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  final fee = calculateParkingFee(widget.mallId, widget.hours);
+
+                  // 1. Open payment app / website
+                  await _openPaymentApp();
+
+                  // 2. Treat this as "payment successful" and mark reservation as occupied
+                  final api = ApiService();
+                  final res = await api.arrive(widget.reservationId);
+
+                  if (!mounted) return;
+
+                  // 3. Show success message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(res["message"] ?? "Payment successful!"),
+                    ),
+                  );
+
+                  // 4. Go back to Reservation list
+                  Navigator.pop(
+                    context,
+                    true,
+                  ); // return success to SelectDuration
+                },
+
+                child: const Text("Proceed to Pay"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------
+   RESERVATIONS PAGE
+-------------------------------------------------------- */
 class ReservationListScreen extends StatefulWidget {
   final int userId;
   const ReservationListScreen({super.key, required this.userId});
@@ -873,18 +1085,21 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                 backgroundColor: Colors.green,
                               ),
                               onPressed: () async {
-                                final res = await api.arrive(r['id']);
-
-                                if (!mounted) return;
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(res['message'] ?? "Arrived"),
+                                final success = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => SelectDurationPage(
+                                      reservationId: r['id'],
+                                      mallId: r['mall_id'],
+                                    ),
                                   ),
                                 );
 
-                                _loadReservations();
+                                if (success == true) {
+                                  _loadReservations(); // auto refresh UI
+                                }
                               },
+
                               child: const Text("Arrive"),
                             ),
                           ],
