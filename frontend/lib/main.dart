@@ -274,7 +274,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
               },
               child: const Padding(
                 padding: EdgeInsets.all(14.0),
-                child: Text("Reserve"),
+                child: Text("Booking"),
               ),
             ),
 
@@ -292,7 +292,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
               },
               child: const Padding(
                 padding: EdgeInsets.all(14.0),
-                child: Text("Reservations"),
+                child: Text("My Reservations"),
               ),
             ),
 
@@ -661,19 +661,23 @@ Weekends:
 /* -------------------------------------------------------
    SIDE LABEL (Entrance / Lift)
 -------------------------------------------------------- */
-
 class _SideLabel extends StatelessWidget {
-  final String title; // no longer used, but can keep for compatibility
+  final String title;
   final IconData icon;
 
   const _SideLabel({required this.title, required this.icon});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: RotatedBox(
-        quarterTurns: 0, // rotate icon clockwise 90 degrees
-        child: Icon(icon, size: 32, color: Colors.black),
+    return Tooltip(
+      message: title, // text shown in tooltip
+      triggerMode: TooltipTriggerMode.tap, // 👈 tap instead of long-press
+      waitDuration: Duration.zero,
+      showDuration: const Duration(seconds: 2),
+      child: Icon(
+        icon,
+        size: 32,
+        color: Colors.black,
       ),
     );
   }

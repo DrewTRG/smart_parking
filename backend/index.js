@@ -2,28 +2,48 @@ const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
+const axios = require("axios");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// ======================
+// ESP32 CONFIG (ONLY Mall A spot 17)
+// ======================
+const ESP32_IP = "http://10.11.17.77"; // remember to change to ESP32 IP
+const ESP32_MALL_ID = 1;                // Mall A
+const ESP32_SPOT_ID = 17;               // Spot ID 17 (NOT spot_number)
+
+// Helper: check if this action should trigger ESP32
+function isEspTarget(spotId, mallId) {
+    return Number(spotId) === ESP32_SPOT_ID && Number(mallId) === ESP32_MALL_ID;
+}
+
+// Call ESP32 endpoint: /reserve, /arrive, /leave
+async function triggerEsp32(action) {
+    try {
+        await axios.get(`${ESP32_IP}/${action}`, { timeout: 2000 });
+        console.log(`ESP32 triggered: ${action}`);
+    } catch (err) {
+        console.log(`ESP32 not reachable (${action}):`, err.message);
+    }
+}
 
 // MySQL connection (XAMPP)
 const db = mysql.createConnection({
     host: "localhost",
     user: "root",
     password: "",
-    database: "smartspot"
+    database: "smartspot",
 });
 
-db.connect(err => {
-    if (err) {
-        console.log("Database connection failed:", err);
-    } else {
-        console.log("Connected to MySQL using XAMPP!");
-    }
+db.connect((err) => {
+    if (err) console.log("Database connection failed:", err);
+    else console.log("Connected to MySQL using XAMPP!");
 });
 
-// Test API (API Starts Here)
+// Test API
 app.get("/", (req, res) => {
     res.send("Backend running successfully!");
 });
@@ -31,15 +51,13 @@ app.get("/", (req, res) => {
 // Get all parking spots
 app.get("/spots/:mallId", (req, res) => {
     const mallId = req.params.mallId;
-
     const sql = "SELECT * FROM parking_spots WHERE mall_id = ?";
+
     db.query(sql, [mallId], (err, results) => {
         if (err) return res.json({ success: false, error: err });
-
         res.json({ success: true, spots: results });
     });
 });
-
 
 // Reserve a parking spot
 app.post("/reserve", (req, res) => {
@@ -49,22 +67,22 @@ app.post("/reserve", (req, res) => {
         "INSERT INTO reservations (user_id, spot_id, mall_id, status) VALUES (?, ?, ?, 'reserved')";
 
     db.query(insertSql, [userId, spotId, mallId], (err, result) => {
-        if (err) {
-            return res.json({ success: false, error: err });
-        }
+        if (err) return res.json({ success: false, error: err });
 
-        // after reservation, update parking_spots to mark it as unavailable
         const updateSql = "UPDATE parking_spots SET isAvailable = 0 WHERE id = ?";
 
-        db.query(updateSql, [spotId], (err2) => {
-            if (err2) {
-                return res.json({ success: false, error: err2 });
+        db.query(updateSql, [spotId], async (err2) => {
+            if (err2) return res.json({ success: false, error: err2 });
+
+            //ESP32 hook ONLY for Mall A spotId 17
+            if (isEspTarget(spotId, mallId)) {
+                await triggerEsp32("reserve");
             }
 
             res.json({
                 success: true,
                 reservationId: result.insertId,
-                message: "Spot reserved and marked as occupied",
+                message: "Spot reserved and marked as unavailable",
             });
         });
     });
@@ -73,27 +91,22 @@ app.post("/reserve", (req, res) => {
 // User registration
 app.post("/register", (req, res) => {
     const { name, email, password } = req.body;
-
     if (!name || !email || !password) {
         return res.json({ success: false, message: "Missing fields" });
     }
 
-    // Check if email already exists
     const checkSql = "SELECT * FROM users WHERE email = ?";
     db.query(checkSql, [email], (err, results) => {
         if (err) return res.json({ success: false, error: err });
-
         if (results.length > 0) {
             return res.json({ success: false, message: "Email already registered" });
         }
 
-        // Hash password
         const salt = bcrypt.genSaltSync(10);
         const hash = bcrypt.hashSync(password, salt);
 
         const insertSql =
             "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)";
-
         db.query(insertSql, [name, email, hash], (err2, result) => {
             if (err2) return res.json({ success: false, error: err2 });
 
@@ -109,7 +122,6 @@ app.post("/register", (req, res) => {
 // User login
 app.post("/login", (req, res) => {
     const { email, password } = req.body;
-
     if (!email || !password) {
         return res.json({ success: false, message: "Missing email or password" });
     }
@@ -117,19 +129,16 @@ app.post("/login", (req, res) => {
     const sql = "SELECT * FROM users WHERE email = ?";
     db.query(sql, [email], (err, results) => {
         if (err) return res.json({ success: false, error: err });
-
         if (results.length === 0) {
             return res.json({ success: false, message: "Invalid email or password" });
         }
 
         const user = results[0];
-
         const passwordMatch = bcrypt.compareSync(password, user.password_hash);
         if (!passwordMatch) {
             return res.json({ success: false, message: "Invalid email or password" });
         }
 
-        // Login success
         res.json({
             success: true,
             userId: user.id,
@@ -145,87 +154,96 @@ app.get("/reservations/:userId", (req, res) => {
     const userId = req.params.userId;
 
     const sql = `
-        SELECT 
-            reservations.id,
-            reservations.status,
-            reservations.created_at,
-            reservations.mall_id,
-            parking_spots.spot_number
-        FROM reservations
-        JOIN parking_spots ON reservations.spot_id = parking_spots.id
-        WHERE reservations.user_id = ?
-          AND reservations.status IN ('reserved', 'occupied')
-        ORDER BY reservations.created_at DESC
-    `;
+    SELECT 
+      reservations.id,
+      reservations.status,
+      reservations.created_at,
+      reservations.mall_id,
+      parking_spots.spot_number
+    FROM reservations
+    JOIN parking_spots ON reservations.spot_id = parking_spots.id
+    WHERE reservations.user_id = ?
+      AND reservations.status IN ('reserved', 'occupied')
+    ORDER BY reservations.created_at DESC
+  `;
 
     db.query(sql, [userId], (err, results) => {
         if (err) return res.json({ success: false, error: err });
-
-        res.json({
-            success: true,
-            reservations: results
-        });
+        res.json({ success: true, reservations: results });
     });
 });
 
+// Arrive (mark occupied)
 app.post("/arrive", (req, res) => {
     const { reservationId } = req.body;
 
-    const sql = `
-        UPDATE reservations
-        SET status = 'occupied'
-        WHERE id = ?
-    `;
+    const updateSql = `
+    UPDATE reservations
+    SET status = 'occupied'
+    WHERE id = ?
+  `;
 
-    db.query(sql, [reservationId], (err) => {
+    db.query(updateSql, [reservationId], (err) => {
         if (err) return res.json({ success: false, error: err });
 
-        // FUTURE ESP32 HOOK:
-        // axios.get("http://esp32-ip/openGate");
+        // Now find spot_id + mall_id so we can decide ESP trigger
+        const findSql = "SELECT spot_id, mall_id FROM reservations WHERE id = ?";
 
-        res.json({
-            success: true,
-            message: "Arrival registered. Barrier will open (future ESP32)."
+        db.query(findSql, [reservationId], async (err2, rows) => {
+            if (!err2 && rows.length > 0) {
+                const { spot_id, mall_id } = rows[0];
+
+                if (isEspTarget(spot_id, mall_id)) {
+                    await triggerEsp32("arrive");
+                }
+            }
+
+            res.json({
+                success: true,
+                message: "Arrival registered",
+            });
         });
     });
 });
 
+// Leave (mark completed + free spot)
 app.post("/leave", (req, res) => {
     const { reservationId } = req.body;
 
-    const findSql = "SELECT spot_id FROM reservations WHERE id = ?";
-
+    const findSql = "SELECT spot_id, mall_id FROM reservations WHERE id = ?";
     db.query(findSql, [reservationId], (err, rows) => {
         if (err || rows.length === 0) {
             return res.json({ success: false, message: "Reservation not found" });
         }
 
-        const spotId = rows[0].spot_id;
+        const { spot_id, mall_id } = rows[0];
 
         const completeSql = `
-            UPDATE reservations
-            SET status = 'completed'
-            WHERE id = ?
-        `;
+      UPDATE reservations
+      SET status = 'completed'
+      WHERE id = ?
+    `;
 
         db.query(completeSql, [reservationId], (err2) => {
             if (err2) return res.json({ success: false, error: err2 });
 
             const freeSql = `
-                UPDATE parking_spots
-                SET isAvailable = 1
-                WHERE id = ?
-            `;
+        UPDATE parking_spots
+        SET isAvailable = 1
+        WHERE id = ?
+      `;
 
-            db.query(freeSql, [spotId], (err3) => {
+            db.query(freeSql, [spot_id], async (err3) => {
                 if (err3) return res.json({ success: false, error: err3 });
 
-                // FUTURE ESP32 HOOK:
-                // axios.get("http://esp32-ip/openExitGate");
+                //ESP32 hook ONLY for Mall A spotId 17
+                if (isEspTarget(spot_id, mall_id)) {
+                    await triggerEsp32("leave");
+                }
 
                 res.json({
                     success: true,
-                    message: "Parking session completed. Spot is now available."
+                    message: "Parking session completed. Spot is now available.",
                 });
             });
         });
@@ -236,31 +254,39 @@ app.post("/leave", (req, res) => {
 app.post("/cancel", (req, res) => {
     const { reservationId } = req.body;
 
-    // Step 1: Get the spot_id of the reservation
-    const findSql = "SELECT spot_id FROM reservations WHERE id = ?";
+    // 1. Get spot_id and mall_id
+    const findSql = "SELECT spot_id, mall_id FROM reservations WHERE id = ?";
     db.query(findSql, [reservationId], (err, rows) => {
         if (err || rows.length === 0) {
             return res.json({ success: false, message: "Reservation not found" });
         }
 
-        const spotId = rows[0].spot_id;
+        const { spot_id, mall_id } = rows[0];
 
-        // Step 2: Cancel reservation
+        // 2. Cancel reservation
         const cancelSql = `
-            UPDATE reservations SET status = 'cancelled'
+            UPDATE reservations 
+            SET status = 'cancelled'
             WHERE id = ?
         `;
 
         db.query(cancelSql, [reservationId], (err2) => {
             if (err2) return res.json({ success: false, error: err2 });
 
-            // Step 3: Set parking spot back to available
+            // 3. Free parking spot
             const freeSpotSql = `
-                UPDATE parking_spots SET isAvailable = 1
+                UPDATE parking_spots 
+                SET isAvailable = 1
                 WHERE id = ?
             `;
-            db.query(freeSpotSql, [spotId], (err3) => {
+
+            db.query(freeSpotSql, [spot_id], async (err3) => {
                 if (err3) return res.json({ success: false, error: err3 });
+
+                //ESP32 HOOK — ONLY Mall A, Spot 17
+                if (spot_id === ESP32_SPOT_ID && mall_id === 1) {
+                    await triggerEsp32("leave"); // LED OFF
+                }
 
                 res.json({
                     success: true,
@@ -271,32 +297,28 @@ app.post("/cancel", (req, res) => {
     });
 });
 
-// Get completed reservation history
+
+// History
 app.get("/history/:userId", (req, res) => {
     const userId = req.params.userId;
 
     const sql = `
     SELECT 
-        reservations.id,
-        reservations.status,
-        reservations.created_at,
-        reservations.mall_id,
-        parking_spots.spot_number
+      reservations.id,
+      reservations.status,
+      reservations.created_at,
+      reservations.mall_id,
+      parking_spots.spot_number
     FROM reservations
-    JOIN parking_spots 
-        ON reservations.spot_id = parking_spots.id
+    JOIN parking_spots ON reservations.spot_id = parking_spots.id
     WHERE reservations.user_id = ?
       AND reservations.status IN ('completed', 'cancelled')
     ORDER BY reservations.created_at DESC
-`;
+  `;
 
     db.query(sql, [userId], (err, results) => {
         if (err) return res.json({ success: false, error: err });
-
-        res.json({
-            success: true,
-            history: results
-        });
+        res.json({ success: true, history: results });
     });
 });
 
@@ -304,59 +326,15 @@ app.post("/deleteHistory", (req, res) => {
     const { reservationId } = req.body;
 
     const sql = `
-        DELETE FROM reservations
-        WHERE id = ? AND status IN ('completed', 'cancelled')
-    `;
+    DELETE FROM reservations
+    WHERE id = ? AND status IN ('completed', 'cancelled')
+  `;
 
-    db.query(sql, [reservationId], (err, result) => {
+    db.query(sql, [reservationId], (err) => {
         if (err) return res.json({ success: false, error: err });
-
-        return res.json({
-            success: true,
-            message: "History entry deleted"
-        });
+        res.json({ success: true, message: "History entry deleted" });
     });
 });
-
-// Mark reservation as completed
-app.post("/complete", (req, res) => {
-    const { reservationId } = req.body;
-
-    // First get the spot
-    const findSql = "SELECT spot_id FROM reservations WHERE id = ?";
-    db.query(findSql, [reservationId], (err, rows) => {
-        if (err || rows.length === 0) {
-            return res.json({ success: false, message: "Reservation not found" });
-        }
-
-        const spotId = rows[0].spot_id;
-
-        // Mark as completed
-        const completeSql = `
-            UPDATE reservations SET status = 'completed'
-            WHERE id = ?
-        `;
-
-        db.query(completeSql, [reservationId], (err2) => {
-            if (err2) return res.json({ success: false, error: err2 });
-
-            // Free the parking spot
-            const freeSql = `
-                UPDATE parking_spots SET isAvailable = 1
-                WHERE id = ?
-            `;
-            db.query(freeSql, [spotId], (err3) => {
-                if (err3) return res.json({ success: false, error: err3 });
-
-                res.json({
-                    success: true,
-                    message: "Reservation completed and spot freed."
-                });
-            });
-        });
-    });
-});
-
 
 // Start backend server
 app.listen(3000, () => {
