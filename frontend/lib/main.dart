@@ -312,8 +312,103 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 child: Text("History"),
               ),
             ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => StatisticScreen(userId: widget.userId),
+                  ),
+                );
+              },
+              child: const Padding(
+                padding: EdgeInsets.all(14.0),
+                child: Text("My Statistic"),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            const _UserManualCard(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------
+  USER GUIDE
+-------------------------------------------------------- */
+class _UserManualCard extends StatelessWidget {
+  const _UserManualCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 3,
+      color: Colors.grey.shade100,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              "User Guide",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+
+            SizedBox(height: 12),
+
+            _GuideItem(
+              icon: Icons.calendar_today,
+              text:
+                  "Booking: Reserve an available parking spot at your selected mall.",
+            ),
+
+            _GuideItem(
+              icon: Icons.confirmation_number,
+              text:
+                  "My Reservations: View, cancel, arrive, or leave your current reservations.",
+            ),
+
+            _GuideItem(
+              icon: Icons.history,
+              text: "History: View your past parking records.",
+            ),
+
+            _GuideItem(
+              icon: Icons.bar_chart,
+              text:
+                  "My Statistic: See your parking usage, total hours, and spending over time.",
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GuideItem extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _GuideItem({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 30),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 22, color: Colors.blue),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
+        ],
       ),
     );
   }
@@ -334,10 +429,11 @@ class MallSelectionScreen extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ElevatedButton(
-              onPressed: () {
+            _MallCard(
+              title: "Sunway Pyramid",
+              imagePath: "assets/images/sunway.jpg",
+              onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -345,11 +441,14 @@ class MallSelectionScreen extends StatelessWidget {
                   ),
                 );
               },
-              child: Text("Mall A"),
             ),
 
-            ElevatedButton(
-              onPressed: () {
+            const SizedBox(height: 20),
+
+            _MallCard(
+              title: "Pavilion Bukit Jalil",
+              imagePath: "assets/images/pavilion.jpg",
+              onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -357,7 +456,65 @@ class MallSelectionScreen extends StatelessWidget {
                   ),
                 );
               },
-              child: Text("Mall B"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MallCard extends StatelessWidget {
+  final String title;
+  final String imagePath;
+  final VoidCallback onTap;
+
+  const _MallCard({
+    required this.title,
+    required this.imagePath,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ---- Mall Image ----
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              child: Image.asset(
+                imagePath,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+
+            // ---- Mall Title ----
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios, size: 16),
+                ],
+              ),
             ),
           ],
         ),
@@ -392,26 +549,26 @@ class _ParkingScreenState extends State<ParkingScreen> {
   String _getRateText() {
     if (widget.mallId == 1) {
       return """
-Mall A Parking Rates
+Sunway Pyramid Parking Rates
 
 Weekdays:
 - RM 3.00 for the first hour
-- RM 2.00 per subsequent hour
+- RM 1.00 per subsequent hour
 
 Weekends:
-- RM 3.00 for the first 2 hours
+- RM 5.00 for the first 2 hours
 - RM 2.00 per subsequent hour
 """;
     } else if (widget.mallId == 2) {
       return """
-Mall B Parking Rates
+Pavilion Bukit Jalil Parking Rates
 
 Weekdays:
-- RM 4.00 for the first 2 hours
-- RM 2.00 per subsequent hour
+- RM 3.00 for the first 2 hours
+- RM 1.00 per subsequent hour
 
 Weekends:
-- RM 3.00 for the first hour
+- RM 4.00 for the first hour
 - RM 2.00 per subsequent hour
 """;
     } else {
@@ -649,6 +806,9 @@ Weekends:
                           ),
                         ],
                       ),
+
+                      SizedBox(height: 10),
+                      const ParkingGuide(),
                     ],
                   ),
                 ),
@@ -674,11 +834,7 @@ class _SideLabel extends StatelessWidget {
       triggerMode: TooltipTriggerMode.tap, // 👈 tap instead of long-press
       waitDuration: Duration.zero,
       showDuration: const Duration(seconds: 2),
-      child: Icon(
-        icon,
-        size: 32,
-        color: Colors.black,
-      ),
+      child: Icon(icon, size: 32, color: Colors.black),
     );
   }
 }
@@ -704,6 +860,123 @@ class _TopLabel extends StatelessWidget {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ],
+    );
+  }
+}
+
+/* -------------------------------------------------------
+  USER GUIDE (PARKING)
+-------------------------------------------------------- */
+class ParkingGuide extends StatelessWidget {
+  const ParkingGuide({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(top: 24),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              "Parking Guide",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 12),
+
+            // ---- Slot color guide ----
+            _GuideRow(color: Colors.green, text: "Green slot → Available (Can be reserved)"),
+            _GuideRow(color: Colors.red, text: "Red slot → Unavailable (Cannot be reserved)"),
+            SizedBox(height: 10),
+
+            _GuideText("Tap a green slot to reserve"),
+            _GuideText("Red spot cannot be reserved"),
+            SizedBox(height: 16),
+
+            Divider(),
+
+            SizedBox(height: 12),
+
+            // ---- Icon guide ----
+            Text(
+              "Map Icons",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 10),
+
+            _IconGuideRow(icon: Icons.arrow_forward, text: "Entrance"),
+            _IconGuideRow(icon: Icons.exit_to_app, text: "Exit"),
+            _IconGuideRow(
+              icon: Icons.elevator,
+              text: "Lift to Mall/Jaya Grocer",
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GuideRow extends StatelessWidget {
+  final Color color;
+  final String text;
+
+  const _GuideRow({required this.color, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(text),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuideText extends StatelessWidget {
+  final String text;
+  const _GuideText(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text("• $text"),
+    );
+  }
+}
+
+class _IconGuideRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _IconGuideRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: Colors.black),
+          const SizedBox(width: 10),
+          Text(text),
+        ],
+      ),
     );
   }
 }
@@ -816,20 +1089,30 @@ double calculateParkingFee(int mallId, int hours) {
   double total = 0;
 
   if (mallId == 1) {
-    // Mall A
+    // Sunway Pyramid
     if (!isWeekend) {
-      total = 3 + (hours - 1) * 2;
+      // Weekdays
+      total = 3 + (hours - 1) * 1;
     } else {
-      if (hours == 1) total = 3;
-      if (hours >= 2) total = 3 + 3 + (hours - 2) * 2;
+      // Weekends
+      if (hours <= 2) {
+        total = 5;
+      } else {
+        total = 5 + (hours - 2) * 2;
+      }
     }
-  } else {
-    // Mall B
+  } else if (mallId == 2) {
+    // Pavilion Bukit Jalil
     if (!isWeekend) {
-      if (hours == 1) total = 4;
-      if (hours >= 2) total = 4 + 4 + (hours - 2) * 2;
+      // Weekdays
+      if (hours <= 2) {
+        total = 3;
+      } else {
+        total = 3 + (hours - 2) * 1;
+      }
     } else {
-      total = 3 + (hours - 1) * 2;
+      // Weekends
+      total = 4 + (hours - 1) * 2;
     }
   }
 
@@ -1069,7 +1352,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                     child: ListTile(
                       title: Text("Spot P${r['spot_number']}"),
                       subtitle: Text(
-                        "Mall: ${r['mall_id'] == 1 ? 'Mall A' : 'Mall B'}\nStatus: ${r['status']}",
+                        "Mall: ${r['mall_id'] == 1 ? 'Sunway Pyramid' : 'Pavilion Bukit Jalil'}\nStatus: ${r['status']}",
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1234,7 +1517,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     child: ListTile(
                       title: Text("Spot P${h['spot_number']}"),
                       subtitle: Text(
-                        "Mall: ${h['mall_id'] == 1 ? 'Mall A' : 'Mall B'}\n"
+                        "Mall: ${h['mall_id'] == 1 ? 'Sunway Pyramid' : 'Pavilion Bukit Jalil'}\n"
                         "Status: ${h['status']}\n"
                         "Date: ${cleanDate(h['created_at'])}",
                       ),
@@ -1256,6 +1539,128 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   );
                 },
               ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------
+   STATS
+-------------------------------------------------------- */
+class StatisticScreen extends StatefulWidget {
+  final int userId;
+  const StatisticScreen({super.key, required this.userId});
+
+  @override
+  State<StatisticScreen> createState() => _StatisticScreenState();
+}
+
+class _StatisticScreenState extends State<StatisticScreen> {
+  String selectedRange = "7 days";
+
+  final Map<String, Map<String, dynamic>> statsData = {
+    "7 days": {"visits": 3, "hours": 6, "spent": 18.00},
+    "1 month": {"visits": 12, "hours": 28, "spent": 82.00},
+    "3 months": {"visits": 30, "hours": 75, "spent": 210.00},
+    "6 months": {"visits": 58, "hours": 140, "spent": 395.00},
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final data = statsData[selectedRange]!;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("My Statistics")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ---- Time range selector ----
+            DropdownButton<String>(
+              value: selectedRange,
+              items: statsData.keys
+                  .map(
+                    (range) =>
+                        DropdownMenuItem(value: range, child: Text(range)),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() => selectedRange = value!);
+              },
+            ),
+
+            const SizedBox(height: 24),
+
+            // ---- Statistic cards ----
+            _StatCard(
+              title: "Total Visits",
+              value: data["visits"].toString(),
+              icon: Icons.local_parking,
+            ),
+
+            _StatCard(
+              title: "Total Hours Parked",
+              value: "${data["hours"]} hrs",
+              icon: Icons.access_time,
+            ),
+
+            _StatCard(
+              title: "Total Spent",
+              value: "RM ${data["spent"].toStringAsFixed(2)}",
+              icon: Icons.payments,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(icon, size: 36, color: Colors.blue),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
