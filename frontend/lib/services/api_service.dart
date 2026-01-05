@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // static const String baseUrl = "http://10.11.17.120:3000";
+  // static const String baseUrl = "http://10.101.186.120:3000";
   static const String baseUrl = "http://192.168.0.2:3000";
   /* --------------------------------------------------------------
      PARKING SPOTS
@@ -120,14 +120,14 @@ class ApiService {
   /* --------------------------------------------------------------
      DELETE HISTORY
   -------------------------------------------------------------- */
-Future<Map<String, dynamic>> deleteHistory(int reservationId) async {
-  final response = await http.post(
-    Uri.parse("$baseUrl/deleteHistory"),
-    headers: {"Content-Type": "application/json"},
-    body: jsonEncode({"reservationId": reservationId}),
-  );
-  return jsonDecode(response.body);
-}
+  Future<Map<String, dynamic>> deleteHistory(int reservationId) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/deleteHistory"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"reservationId": reservationId}),
+    );
+    return jsonDecode(response.body);
+  }
 
   /* --------------------------------------------------------------
      MARK RESERVATION COMPLETED
@@ -141,5 +141,67 @@ Future<Map<String, dynamic>> deleteHistory(int reservationId) async {
     );
 
     return jsonDecode(response.body);
+  }
+
+  /* --------------------------------------------------------------
+    ADMIN: Update parking availability
+-------------------------------------------------------------- */
+  Future<Map<String, dynamic>> updateParking(
+    int spotId,
+    int isAvailable,
+  ) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/admin/updateParking"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"spotId": spotId, "isAvailable": isAvailable}),
+    );
+
+    return jsonDecode(response.body);
+  }
+
+  // Get users
+  Future<List<dynamic>> getUsers() async {
+    final res = await http.get(Uri.parse("$baseUrl/admin/users"));
+    final data = jsonDecode(res.body);
+    return data["users"];
+  }
+
+  // Update user (name and password)
+  Future<Map<String, dynamic>> updateUser(
+    int userId,
+    String name,
+    String password,
+  ) async {
+    final res = await http.post(
+      Uri.parse("$baseUrl/admin/updateUser"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"userId": userId, "name": name, "password": password}),
+    );
+    return jsonDecode(res.body);
+  }
+
+  // ADMIN: get reservations
+  Future<List<dynamic>> getAllReservations() async {
+    final res = await http.get(Uri.parse("$baseUrl/admin/reservations"));
+    final data = jsonDecode(res.body);
+    return data["reservations"];
+  }
+
+  // ADMIN: cancel reservation
+  Future<void> adminCancelReservation(int reservationId) async {
+    await http.post(
+      Uri.parse("$baseUrl/admin/cancelReservation"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"reservationId": reservationId}),
+    );
+  }
+
+  // ADMIN: complete reservation
+  Future<void> adminCompleteReservation(int reservationId) async {
+    await http.post(
+      Uri.parse("$baseUrl/admin/completeReservation"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"reservationId": reservationId}),
+    );
   }
 }

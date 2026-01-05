@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'admin.dart';
 
 void main() {
   runApp(const MyApp());
@@ -57,16 +58,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (res["success"] == true) {
       final int userId = res["userId"];
+      final String role = res["role"];
       final String name = res["name"];
 
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Welcome, $name")));
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => MainMenuScreen(userId: userId)),
-      );
+      if (role == "admin") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AdminDashboardScreen(userId: userId),
+          ),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => MainMenuScreen(userId: userId)),
+        );
+      }
     } else {
       ScaffoldMessenger.of(
         context,
@@ -247,14 +258,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       appBar: AppBar(
         title: const Text("Main Menu"),
         actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == "logout") _logout();
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: "logout", child: Text("Logout")),
-            ],
-          ),
+          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         ],
       ),
 
@@ -415,64 +419,124 @@ class _GuideItem extends StatelessWidget {
 }
 
 /* -------------------------------------------------------
-   MALL SELECTION
+   MALL SELECTION (WITH AVAILABILITY)
 -------------------------------------------------------- */
-class MallSelectionScreen extends StatelessWidget {
+
+class MallSelectionScreen extends StatefulWidget {
   final int userId;
 
   const MallSelectionScreen({super.key, required this.userId});
 
   @override
+  State<MallSelectionScreen> createState() => _MallSelectionScreenState();
+}
+
+class _MallSelectionScreenState extends State<MallSelectionScreen> {
+  final ApiService api = ApiService();
+
+  int sunwayAvailable = 0;
+  int sunwayTotal = 0;
+
+  int pavilionAvailable = 0;
+  int pavilionTotal = 0;
+
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvailability();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadAvailability();
+  }
+
+  Future<void> _loadAvailability() async {
+    try {
+      final sunway = await api.getSpots(1);
+      final pavilion = await api.getSpots(2);
+
+      setState(() {
+        sunwayTotal = sunway.length;
+        sunwayAvailable = sunway.where((s) => s['isAvailable'] == 1).length;
+
+        pavilionTotal = pavilion.length;
+        pavilionAvailable = pavilion.where((s) => s['isAvailable'] == 1).length;
+
+        loading = false;
+      });
+    } catch (e) {
+      setState(() => loading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Select Mall")),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            _MallCard(
-              title: "Sunway Pyramid",
-              imagePath: "assets/images/sunway.jpg",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ParkingScreen(userId: userId, mallId: 1),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  _MallCard(
+                    title: "Sunway Pyramid",
+                    availability: "Available: $sunwayAvailable / $sunwayTotal",
+                    imagePath: "assets/images/sunway.jpg",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ParkingScreen(userId: widget.userId, mallId: 1),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
 
-            const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-            _MallCard(
-              title: "Pavilion Bukit Jalil",
-              imagePath: "assets/images/pavilion.jpg",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ParkingScreen(userId: userId, mallId: 2),
+                  _MallCard(
+                    title: "Pavilion Bukit Jalil",
+                    availability:
+                        "Available: $pavilionAvailable / $pavilionTotal",
+                    imagePath: "assets/images/pavilion.jpg",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ParkingScreen(userId: widget.userId, mallId: 2),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }
+
+/* -------------------------------------------------------
+   MALL CARD
+-------------------------------------------------------- */
 
 class _MallCard extends StatelessWidget {
   final String title;
   final String imagePath;
   final VoidCallback onTap;
+  final String availability;
 
   const _MallCard({
     required this.title,
     required this.imagePath,
     required this.onTap,
+    required this.availability,
   });
 
   @override
@@ -499,20 +563,32 @@ class _MallCard extends StatelessWidget {
               ),
             ),
 
-            // ---- Mall Title ----
+            // ---- Mall Title + Availability ----
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, size: 16),
+                    ],
                   ),
-                  const Icon(Icons.arrow_forward_ios, size: 16),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    availability,
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                  ),
                 ],
               ),
             ),
@@ -887,8 +963,14 @@ class ParkingGuide extends StatelessWidget {
             SizedBox(height: 12),
 
             // ---- Slot color guide ----
-            _GuideRow(color: Colors.green, text: "Green slot → Available (Can be reserved)"),
-            _GuideRow(color: Colors.red, text: "Red slot → Unavailable (Cannot be reserved)"),
+            _GuideRow(
+              color: Colors.green,
+              text: "Green slot → Available (Can be reserved)",
+            ),
+            _GuideRow(
+              color: Colors.red,
+              text: "Red slot → Unavailable (Cannot be reserved)",
+            ),
             SizedBox(height: 10),
 
             _GuideText("Tap a green slot to reserve"),

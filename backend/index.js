@@ -11,7 +11,7 @@ app.use(express.json());
 // ======================
 // ESP32 CONFIG (ONLY Mall A spot 17)
 // ======================
-const ESP32_IP = "http://10.11.17.77"; // remember to change to ESP32 IP
+const ESP32_IP = "http://10.101.186.77"; // remember to change to ESP32 IP
 const ESP32_MALL_ID = 1;                // Mall A
 const ESP32_SPOT_ID = 17;               // Spot ID 17 (NOT spot_number)
 
@@ -144,6 +144,7 @@ app.post("/login", (req, res) => {
             userId: user.id,
             name: user.name,
             email: user.email,
+            role: user.role,
             message: "Login successful",
         });
     });
@@ -333,6 +334,153 @@ app.post("/deleteHistory", (req, res) => {
     db.query(sql, [reservationId], (err) => {
         if (err) return res.json({ success: false, error: err });
         res.json({ success: true, message: "History entry deleted" });
+    });
+});
+
+
+// ADMIN: 
+// Update parking availability
+app.post("/admin/updateParking", (req, res) => {
+    const { spotId, isAvailable } = req.body;
+
+    const sql = `
+        UPDATE parking_spots
+        SET isAvailable = ?
+        WHERE id = ?
+    `;
+
+    db.query(sql, [isAvailable, spotId], (err) => {
+        if (err) return res.json({ success: false, error: err });
+
+        res.json({
+            success: true,
+            message: "Parking slot updated",
+        });
+    });
+});
+
+// ADMIN: Get all users
+app.get("/admin/users", (req, res) => {
+    const sql = "SELECT id, name, email FROM users WHERE role = 'user'";
+    db.query(sql, (err, results) => {
+        if (err) return res.json({ success: false, error: err });
+        res.json({ success: true, users: results });
+    });
+});
+
+// ADMIN: Update user details
+app.post("/admin/updateUser", (req, res) => {
+    const { userId, name, password } = req.body;
+
+    if (!userId || !name) {
+        return res.json({ success: false, message: "Missing fields" });
+    }
+
+    if (password && password.length > 0) {
+        // Change name + password
+        const hash = bcrypt.hashSync(password, 10);
+        const sql =
+            "UPDATE users SET name = ?, password_hash = ? WHERE id = ? AND role = 'user'";
+        db.query(sql, [name, hash, userId], (err) => {
+            if (err) return res.json({ success: false, error: err });
+            res.json({ success: true, message: "User updated" });
+        });
+    } else {
+        // Change name only
+        const sql =
+            "UPDATE users SET name = ? WHERE id = ? AND role = 'user'";
+        db.query(sql, [name, userId], (err) => {
+            if (err) return res.json({ success: false, error: err });
+            res.json({ success: true, message: "User updated" });
+        });
+    }
+});
+
+// ADMIN: Get all active reservations
+app.get("/admin/reservations", (req, res) => {
+    const sql = `
+        SELECT 
+          reservations.id,
+          reservations.status,
+          users.name AS user_name,
+          parking_spots.spot_number,
+          reservations.mall_id
+        FROM reservations
+        JOIN users ON reservations.user_id = users.id
+        JOIN parking_spots ON reservations.spot_id = parking_spots.id
+        WHERE reservations.status IN ('reserved', 'occupied')
+        ORDER BY reservations.created_at DESC
+    `;
+
+    db.query(sql, (err, results) => {
+        if (err) return res.json({ success: false, error: err });
+        res.json({ success: true, reservations: results });
+    });
+});
+
+// ADMIN: Force cancel reservation
+app.post("/admin/cancelReservation", async (req, res) => {
+    const { reservationId } = req.body;
+
+    const findSql = "SELECT spot_id, mall_id FROM reservations WHERE id = ?";
+    db.query(findSql, [reservationId], (err, rows) => {
+        if (err || rows.length === 0) {
+            return res.json({ success: false, message: "Reservation not found" });
+        }
+
+        const { spot_id, mall_id } = rows[0];
+
+        const cancelSql =
+            "UPDATE reservations SET status = 'cancelled' WHERE id = ?";
+        db.query(cancelSql, [reservationId], (err2) => {
+            if (err2) return res.json({ success: false, error: err2 });
+
+            const freeSql =
+                "UPDATE parking_spots SET isAvailable = 1 WHERE id = ?";
+            db.query(freeSql, [spot_id], async () => {
+                if (isEspTarget(spot_id, mall_id)) {
+                    await triggerEsp32("leave");
+                }
+
+                res.json({
+                    success: true,
+                    message: "Reservation cancelled by admin",
+                });
+            });
+        });
+    });
+});
+
+// ADMIN: Force complete reservation
+app.post("/admin/completeReservation", async (req, res) => {
+    const { reservationId } = req.body;
+
+    const findSql = "SELECT spot_id, mall_id FROM reservations WHERE id = ?";
+    db.query(findSql, [reservationId], (err, rows) => {
+        if (err || rows.length === 0) {
+            return res.json({ success: false, message: "Reservation not found" });
+        }
+
+        const { spot_id, mall_id } = rows[0];
+
+        const completeSql =
+            "UPDATE reservations SET status = 'completed' WHERE id = ?";
+        db.query(completeSql, [reservationId], (err2) => {
+            if (err2) return res.json({ success: false, error: err2 });
+
+            const freeSql =
+                "UPDATE parking_spots SET isAvailable = 1 WHERE id = ?";
+            db.query(freeSql, [spot_id], async () => {
+                if (isEspTarget(spot_id, mall_id)) {
+                    await triggerEsp32("leave");
+                }
+
+                res.json({
+                    success: true,
+                    message: "Reservation completed by admin",
+                });
+            });
+        });
     });
 });
 
