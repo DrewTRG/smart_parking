@@ -121,6 +121,18 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: _goToRegister,
               child: const Text("No account? Register here"),
             ),
+
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ForgotPasswordScreen(),
+                  ),
+                );
+              },
+              child: const Text("Forgot password?"),
+            ),
           ],
         ),
       ),
@@ -205,6 +217,177 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 : ElevatedButton(
                     onPressed: _doRegister,
                     child: const Text("Register"),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+
+  static const String hardcodedOtp = "123";
+
+  void _sendOtp() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("OTP sent to email")),
+    );
+  }
+
+  void _verifyOtp() {
+    if (_otpController.text.trim() != hardcodedOtp) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Invalid OTP")));
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            ResetPasswordScreen(email: _emailController.text.trim()),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Forgot Password")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Email row + Send button
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(labelText: "Email"),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(onPressed: _sendOtp, child: const Text("Send")),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Show hardcoded OTP
+            // const Align(
+            //   alignment: Alignment.centerLeft,
+            //   child: Text(
+            //     "OTP: 123",
+            //     style: TextStyle(
+            //       fontSize: 14,
+            //       fontWeight: FontWeight.bold,
+            //       color: Colors.grey,
+            //     ),
+            //   ),
+            // ),
+
+            // const SizedBox(height: 10),
+
+            // OTP input
+            TextField(
+              controller: _otpController,
+              decoration: const InputDecoration(labelText: "Enter OTP"),
+            ),
+
+            const SizedBox(height: 30),
+
+            ElevatedButton(onPressed: _verifyOtp, child: const Text("Next")),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ResetPasswordScreen extends StatefulWidget {
+  final String email;
+
+  const ResetPasswordScreen({super.key, required this.email});
+
+  @override
+  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+}
+
+class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+  final ApiService api = ApiService();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmController = TextEditingController();
+
+  bool loading = false;
+
+  void _resetPassword() async {
+    final password = _passwordController.text;
+    final confirm = _confirmController.text;
+
+    if (password.isEmpty || confirm.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please fill all fields")));
+      return;
+    }
+
+    if (password != confirm) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Passwords do not match")));
+      return;
+    }
+
+    setState(() => loading = true);
+    final res = await api.forgotPassword(widget.email, password);
+    setState(() => loading = false);
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(res["message"] ?? "Done")));
+
+    if (res["success"] == true) {
+      Navigator.popUntil(context, (route) => route.isFirst);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Reset Password")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              controller: _passwordController,
+              decoration: const InputDecoration(labelText: "New Password"),
+              obscureText: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _confirmController,
+              decoration: const InputDecoration(labelText: "Confirm Password"),
+              obscureText: true,
+            ),
+            const SizedBox(height: 30),
+            loading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: _resetPassword,
+                    child: const Text("Reset Password"),
                   ),
           ],
         ),

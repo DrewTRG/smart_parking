@@ -11,7 +11,7 @@ app.use(express.json());
 // ======================
 // ESP32 CONFIG (ONLY Mall A spot 17)
 // ======================
-const ESP32_IP = "http://10.101.186.77"; // remember to change to ESP32 IP
+const ESP32_IP = "http://10.21.175.77"; // remember to change to ESP32 IP
 const ESP32_MALL_ID = 1;                // Mall A
 const ESP32_SPOT_ID = 17;               // Spot ID 17 (NOT spot_number)
 
@@ -146,6 +146,36 @@ app.post("/login", (req, res) => {
             email: user.email,
             role: user.role,
             message: "Login successful",
+        });
+    });
+});
+
+// Forgot password
+app.post("/forgotPassword", (req, res) => {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+        return res.json({ success: false, message: "Missing fields" });
+    }
+
+    const checkSql = "SELECT * FROM users WHERE email = ?";
+    db.query(checkSql, [email], (err, results) => {
+        if (err) return res.json({ success: false, error: err });
+        if (results.length === 0) {
+            return res.json({ success: false, message: "Email not found" });
+        }
+
+        const hash = bcrypt.hashSync(newPassword, 10);
+        const updateSql =
+            "UPDATE users SET password_hash = ? WHERE email = ?";
+
+        db.query(updateSql, [hash, email], (err2) => {
+            if (err2) return res.json({ success: false, error: err2 });
+
+            res.json({
+                success: true,
+                message: "Password reset successful",
+            });
         });
     });
 });

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // static const String baseUrl = "http://10.101.186.120:3000";
-  static const String baseUrl = "http://192.168.0.2:3000";
+  // static const String baseUrl = "http://10.21.175.120:3000";
+  static const String baseUrl = "http://192.168.0.3:3000";
   /* --------------------------------------------------------------
      PARKING SPOTS
   -------------------------------------------------------------- */
@@ -50,6 +50,19 @@ class ApiService {
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"email": email, "password": password}),
     );
+    return jsonDecode(response.body);
+  }
+
+  Future<Map<String, dynamic>> forgotPassword(
+    String email,
+    String newPassword,
+  ) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/forgotPassword"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email, "newPassword": newPassword}),
+    );
+
     return jsonDecode(response.body);
   }
 
