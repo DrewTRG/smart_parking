@@ -81,11 +81,14 @@ class ApiService {
   // Mark reservation as "occupied" (user arrived)
   // POST /arrive
   // --------------------------------------------------
-  Future<Map<String, dynamic>> arrive(int reservationId) async {
+  Future<Map<String, dynamic>> arrive(int reservationId, int paidHours) async {
     final response = await http.post(
       Uri.parse("$baseUrl/arrive"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"reservationId": reservationId}),
+      body: jsonEncode({
+        "reservationId": reservationId,
+        "paidHours": paidHours,
+      }),
     );
 
     return jsonDecode(response.body);
@@ -100,6 +103,23 @@ class ApiService {
       Uri.parse("$baseUrl/leave"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"reservationId": reservationId}),
+    );
+
+    return jsonDecode(response.body);
+  }
+
+  //extend
+  Future<Map<String, dynamic>> extendTime(
+    int reservationId,
+    int extraHours,
+  ) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/extendTime"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "reservationId": reservationId,
+        "extraHours": extraHours,
+      }),
     );
 
     return jsonDecode(response.body);

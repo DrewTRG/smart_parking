@@ -239,9 +239,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   static const String hardcodedOtp = "123";
 
   void _sendOtp() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("OTP sent to email")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("OTP sent to email")));
   }
 
   void _verifyOtp() {
@@ -1479,7 +1479,10 @@ class _PaymentSummaryPageState extends State<PaymentSummaryPage> {
 
                   // 2. Treat this as "payment successful" and mark reservation as occupied
                   final api = ApiService();
-                  final res = await api.arrive(widget.reservationId);
+                  final res = await api.arrive(
+                    widget.reservationId,
+                    widget.hours,
+                  );
 
                   if (!mounted) return;
 
@@ -1523,6 +1526,11 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   List reservations = [];
   bool loading = true;
   String? errorMessage;
+
+  String formatDateTime(dynamic value) {
+    if (value == null) return "N/A";
+    return value.toString().replaceAll("T", " ").replaceAll(".000Z", "");
+  }
 
   @override
   void initState() {
@@ -1617,8 +1625,11 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                     child: ListTile(
                       title: Text("Spot P${r['spot_number']}"),
                       subtitle: Text(
-                        "Mall: ${r['mall_id'] == 1 ? 'Sunway Pyramid' : 'Pavilion Bukit Jalil'}\nStatus: ${r['status']}",
+                        "Mall: ${r['mall_id'] == 1 ? 'Sunway Pyramid' : 'Pavilion Bukit Jalil'}\n"
+                        "Status: ${r['status']}\n"
+                        "Expires At: ${formatDateTime(r['end_time'])}",
                       ),
+
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1660,11 +1671,34 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                           if (r['status'] == 'occupied') ...[
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                              ),
+                              onPressed: () async {
+                                final success = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AddTimePage(
+                                      reservationId: r['id'],
+                                      mallId: r['mall_id'],
+                                    ),
+                                  ),
+                                );
+
+                                if (success == true) {
+                                  _loadReservations();
+                                }
+                              },
+                              child: const Text("Add Time"),
+                            ),
+
+                            const SizedBox(width: 8),
+
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.blue,
                               ),
                               onPressed: () async {
                                 final res = await api.leave(r['id']);
-
                                 if (!mounted) return;
 
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1684,6 +1718,170 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                   );
                 },
               ),
+      ),
+    );
+  }
+}
+
+class AddTimePage extends StatelessWidget {
+  final int reservationId;
+  final int mallId;
+
+  const AddTimePage({
+    super.key,
+    required this.reservationId,
+    required this.mallId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Add Parking Time")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            for (int hours = 1; hours <= 3; hours++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final paid = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddTimePaymentPage(
+                          reservationId: reservationId,
+                          mallId: mallId,
+                          extraHours: hours,
+                        ),
+                      ),
+                    );
+
+                    if (paid == true) {
+                      Navigator.pop(context, true);
+                    }
+                  },
+                  child: Text("Add $hours Hour${hours > 1 ? 's' : ''}"),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AddTimePaymentPage extends StatefulWidget {
+  final int reservationId;
+  final int mallId;
+  final int extraHours;
+
+  const AddTimePaymentPage({
+    super.key,
+    required this.reservationId,
+    required this.mallId,
+    required this.extraHours,
+  });
+
+  @override
+  State<AddTimePaymentPage> createState() => _AddTimePaymentPageState();
+}
+
+class _AddTimePaymentPageState extends State<AddTimePaymentPage> {
+  String paymentMethod = "Online Banking";
+  final ApiService api = ApiService();
+
+  Future<void> _openPaymentApp() async {
+    Uri uri;
+
+    if (paymentMethod == "Online Banking") {
+      uri = Uri.parse("https://www.cimbclicks.com.my");
+    } else if (paymentMethod == "Touch N Go") {
+      uri = Uri.parse("https://prod.tngdigital.com.my/pay");
+    } else {
+      uri = Uri.parse("https://visa.com");
+    }
+
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fee = calculateParkingFee(widget.mallId, widget.extraHours);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("Add Time Payment")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Additional Duration: ${widget.extraHours} hour(s)",
+              style: const TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 10),
+
+            Text(
+              "Additional Fee: RM${fee.toStringAsFixed(2)}",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 20),
+
+            const Text("Payment Method"),
+            const SizedBox(height: 8),
+
+            DropdownButton<String>(
+              value: paymentMethod,
+              items: const [
+                DropdownMenuItem(
+                  value: "Online Banking",
+                  child: Text("Online Banking"),
+                ),
+                DropdownMenuItem(
+                  value: "Credit Card",
+                  child: Text("Credit Card"),
+                ),
+                DropdownMenuItem(
+                  value: "Touch N Go",
+                  child: Text("Touch 'n Go"),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() => paymentMethod = value!);
+              },
+            ),
+
+            const Spacer(),
+
+            Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  // 1️⃣ Redirect to payment app / website
+                  await _openPaymentApp();
+
+                  // 2️⃣ Treat payment as successful → extend time
+                  final res = await api.extendTime(
+                    widget.reservationId,
+                    widget.extraHours,
+                  );
+
+                  if (!context.mounted) return;
+
+                  // 3️⃣ Show confirmation
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(res["message"] ?? "Time extended")),
+                  );
+
+                  // 4️⃣ Return success to AddTimePage
+                  Navigator.pop(context, true);
+                },
+                child: const Text("Proceed to Pay"),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ const mysql = require("mysql2");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
+process.env.TZ = "Asia/Kuala_Lumpur";
 
 const app = express();
 app.use(cors());
@@ -36,6 +37,8 @@ const db = mysql.createConnection({
     user: "root",
     password: "",
     database: "smartspot",
+    timezone: "+08:00",
+    dateStrings: true,
 });
 
 db.connect((err) => {
@@ -190,6 +193,7 @@ app.get("/reservations/:userId", (req, res) => {
       reservations.status,
       reservations.created_at,
       reservations.mall_id,
+      reservations.end_time,
       parking_spots.spot_number
     FROM reservations
     JOIN parking_spots ON reservations.spot_id = parking_spots.id
@@ -206,36 +210,110 @@ app.get("/reservations/:userId", (req, res) => {
 
 // Arrive (mark occupied)
 app.post("/arrive", (req, res) => {
-    const { reservationId } = req.body;
+    const { reservationId, paidHours } = req.body;
+
+    if (!paidHours) {
+        return res.json({ success: false, message: "Missing paid hours" });
+    }
+
+    const startTime = new Date();
+    //     new Date().toLocaleString("en-US", { timeZone: "Asia/Kuala_Lumpur" })
+    // );
+    const endTime = new Date(startTime.getTime() + paidHours * 60 * 60 * 1000);
 
     const updateSql = `
-    UPDATE reservations
-    SET status = 'occupied'
-    WHERE id = ?
-  `;
+        UPDATE reservations
+        SET 
+            status = 'occupied',
+            start_time = ?,
+            paid_hours = ?,
+            end_time = ?,
+            penalty_paid = 0
+        WHERE id = ?
+    `;
 
-    db.query(updateSql, [reservationId], (err) => {
-        if (err) return res.json({ success: false, error: err });
+    db.query(
+        updateSql,
+        [startTime, paidHours, endTime, reservationId],
+        (err) => {
+            if (err) return res.json({ success: false, error: err });
 
-        // Now find spot_id + mall_id so we can decide ESP trigger
-        const findSql = "SELECT spot_id, mall_id FROM reservations WHERE id = ?";
-
-        db.query(findSql, [reservationId], async (err2, rows) => {
-            if (!err2 && rows.length > 0) {
-                const { spot_id, mall_id } = rows[0];
-
-                if (isEspTarget(spot_id, mall_id)) {
-                    await triggerEsp32("arrive");
+            // ESP32 trigger (optional)
+            const findSql = "SELECT spot_id, mall_id FROM reservations WHERE id = ?";
+            db.query(findSql, [reservationId], async (err2, rows) => {
+                if (!err2 && rows.length > 0) {
+                    const { spot_id, mall_id } = rows[0];
+                    if (isEspTarget(spot_id, mall_id)) {
+                        await triggerEsp32("arrive");
+                    }
                 }
-            }
 
-            res.json({
-                success: true,
-                message: "Arrival registered",
+                res.json({
+                    success: true,
+                    message: "Arrival registered. Parking time started.",
+                    startTime,
+                    endTime
+                });
             });
-        });
+        }
+    );
+});
+
+// Extend
+app.post("/extendTime", (req, res) => {
+    const { reservationId, extraHours } = req.body;
+
+    if (!reservationId || !extraHours) {
+        return res.json({ success: false, message: "Missing fields" });
+    }
+
+    // Get current end_time & paid_hours
+    const findSql = `
+        SELECT paid_hours, end_time 
+        FROM reservations 
+        WHERE id = ? AND status = 'occupied'
+    `;
+
+    db.query(findSql, [reservationId], (err, rows) => {
+        if (err || rows.length === 0) {
+            return res.json({
+                success: false,
+                message: "Reservation not found or not active",
+            });
+        }
+
+        const currentPaid = rows[0].paid_hours;
+        const currentEnd = new Date(rows[0].end_time);
+
+        const newPaidHours = currentPaid + extraHours;
+        const newEndTime = new Date(
+            currentEnd.getTime() + extraHours * 60 * 60 * 1000
+        );
+
+        const updateSql = `
+            UPDATE reservations
+            SET paid_hours = ?, end_time = ?
+            WHERE id = ?
+        `;
+
+        db.query(
+            updateSql,
+            [newPaidHours, newEndTime, reservationId],
+            (err2) => {
+                if (err2)
+                    return res.json({ success: false, error: err2 });
+
+                res.json({
+                    success: true,
+                    message: "Parking time extended successfully",
+                    newPaidHours,
+                    newEndTime,
+                });
+            }
+        );
     });
 });
+
 
 // Leave (mark completed + free spot)
 app.post("/leave", (req, res) => {
