@@ -1526,6 +1526,9 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   List reservations = [];
   bool loading = true;
   String? errorMessage;
+  Timer? _timer;
+  Set<int> warned15Min = {};
+  Set<int> warnedExpired = {};
 
   String formatDateTime(dynamic value) {
     if (value == null) return "N/A";
@@ -1536,6 +1539,73 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   void initState() {
     super.initState();
     _loadReservations();
+    _startTimer();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      final now = DateTime.now();
+
+      for (final r in reservations) {
+        if (r['status'] != 'occupied' || r['end_time'] == null) continue;
+
+        final end = DateTime.parse(r['end_time']);
+        final diff = end.difference(now).inMinutes;
+        final id = r['id'];
+
+        // 🔔 EXPIRY WARNING
+        if (diff <= 15 && diff > 0 && !warned15Min.contains(id)) {
+          warned15Min.add(id);
+
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => AlertDialog(
+              title: const Text("Parking Expiry Warning"),
+              content: Text(
+                "⏰ Your parking will expire in $diff minute${diff == 1 ? '' : 's'}.\n\n"
+                "Please extend your parking time to avoid penalty.",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("OK"),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // ⛔ EXPIRED POP-UP
+        if (diff <= 0 && !warnedExpired.contains(id)) {
+          warnedExpired.add(id);
+
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => AlertDialog(
+              title: const Text("Parking Time Expired"),
+              content: const Text(
+                "❗ Your parking time has expired.\n\n"
+                "Please pay the penalty before leaving.",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("OK"),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    });
   }
 
   Future<void> _loadReservations() async {
@@ -1617,6 +1687,15 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                 itemCount: reservations.length,
                 itemBuilder: (context, index) {
                   final r = reservations[index];
+                  final end = r['end_time'] != null
+                      ? DateTime.parse(r['end_time'])
+                      : null;
+
+                  final bool expired =
+                      end != null && DateTime.now().isAfter(end);
+
+                  final bool penaltyPaid = r['penalty_paid'] == 1;
+
                   return Card(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -1669,48 +1748,74 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
 
                           // ---------- OCCUPIED ----------
                           if (r['status'] == 'occupied') ...[
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange,
-                              ),
-                              onPressed: () async {
-                                final success = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => AddTimePage(
-                                      reservationId: r['id'],
-                                      mallId: r['mall_id'],
+                            // ➕ ADD TIME (only if NOT expired)
+                            if (!expired)
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                ),
+                                onPressed: () async {
+                                  final success = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AddTimePage(
+                                        reservationId: r['id'],
+                                        mallId: r['mall_id'],
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
 
-                                if (success == true) {
-                                  _loadReservations();
-                                }
-                              },
-                              child: const Text("Add Time"),
-                            ),
+                                  if (success == true) {
+                                    _loadReservations();
+                                  }
+                                },
+                                child: const Text("Add Time"),
+                              ),
 
                             const SizedBox(width: 8),
 
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
+                            // 🚪 LEAVE (if not expired OR penalty already paid)
+                            if (!expired || penaltyPaid)
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                ),
+                                onPressed: () async {
+                                  final res = await api.leave(r['id']);
+                                  if (!mounted) return;
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(res['message'] ?? "Left"),
+                                    ),
+                                  );
+
+                                  _loadReservations();
+                                },
+                                child: const Text("Leave"),
+                              )
+                            // 💰 PAY PENALTY (expired AND not paid)
+                            else
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                ),
+                                onPressed: () async {
+                                  final paid = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PenaltyPaymentPage(
+                                        reservationId: r['id'],
+                                      ),
+                                    ),
+                                  );
+
+                                  if (paid == true) {
+                                    _loadReservations(); // 🔥 THIS IS KEY
+                                  }
+                                },
+                                child: const Text("Pay Penalty"),
                               ),
-                              onPressed: () async {
-                                final res = await api.leave(r['id']);
-                                if (!mounted) return;
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(res['message'] ?? "Left"),
-                                  ),
-                                );
-
-                                _loadReservations();
-                              },
-                              child: const Text("Leave"),
-                            ),
                           ],
                         ],
                       ),
@@ -1718,6 +1823,118 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                   );
                 },
               ),
+      ),
+    );
+  }
+}
+
+class PenaltyPaymentPage extends StatefulWidget {
+  final int reservationId;
+
+  const PenaltyPaymentPage({super.key, required this.reservationId});
+
+  @override
+  State<PenaltyPaymentPage> createState() => _PenaltyPaymentPageState();
+}
+
+class _PenaltyPaymentPageState extends State<PenaltyPaymentPage> {
+  final ApiService api = ApiService();
+  String paymentMethod = "Online Banking";
+
+  final double penaltyAmount = 10.0;
+
+  Future<void> _openPaymentApp() async {
+    Uri uri;
+
+    if (paymentMethod == "Online Banking") {
+      uri = Uri.parse("https://www.cimbclicks.com.my");
+    } else if (paymentMethod == "Touch N Go") {
+      uri = Uri.parse("https://prod.tngdigital.com.my/pay");
+    } else {
+      uri = Uri.parse("https://visa.com");
+    }
+
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Penalty Payment")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Parking Time Exceeded",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              "Penalty Amount: RM${penaltyAmount.toStringAsFixed(2)}",
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            const Text("Payment Method"),
+            const SizedBox(height: 8),
+
+            DropdownButton<String>(
+              value: paymentMethod,
+              items: const [
+                DropdownMenuItem(
+                  value: "Online Banking",
+                  child: Text("Online Banking"),
+                ),
+                DropdownMenuItem(
+                  value: "Credit Card",
+                  child: Text("Credit Card"),
+                ),
+                DropdownMenuItem(
+                  value: "Touch N Go",
+                  child: Text("Touch 'n Go"),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() => paymentMethod = value!);
+              },
+            ),
+
+            const Spacer(),
+
+            Center(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () async {
+                  await _openPaymentApp();
+
+                  final res = await api.payPenalty(widget.reservationId);
+
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        res['message'] ?? "Penalty paid successfully",
+                      ),
+                    ),
+                  );
+
+                  Navigator.pop(context, true);
+                },
+                child: const Text("Proceed to Pay"),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

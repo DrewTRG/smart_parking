@@ -125,6 +125,16 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
+  Future<Map<String, dynamic>> payPenalty(int reservationId) async {
+    final res = await http.post(
+      Uri.parse("$baseUrl/payPenalty"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"reservationId": reservationId}),
+    );
+
+    return jsonDecode(res.body);
+  }
+
   /* --------------------------------------------------------------
      CANCEL RESERVATION
   -------------------------------------------------------------- */

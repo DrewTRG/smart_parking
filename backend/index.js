@@ -194,6 +194,7 @@ app.get("/reservations/:userId", (req, res) => {
       reservations.created_at,
       reservations.mall_id,
       reservations.end_time,
+      reservations.penalty_paid,
       parking_spots.spot_number
     FROM reservations
     JOIN parking_spots ON reservations.spot_id = parking_spots.id
@@ -319,42 +320,81 @@ app.post("/extendTime", (req, res) => {
 app.post("/leave", (req, res) => {
     const { reservationId } = req.body;
 
-    const findSql = "SELECT spot_id, mall_id FROM reservations WHERE id = ?";
-    db.query(findSql, [reservationId], (err, rows) => {
+    const sql = `
+        SELECT spot_id, mall_id, end_time, penalty_paid
+        FROM reservations
+        WHERE id = ? AND status = 'occupied'
+    `;
+
+    db.query(sql, [reservationId], async (err, rows) => {
         if (err || rows.length === 0) {
             return res.json({ success: false, message: "Reservation not found" });
         }
 
-        const { spot_id, mall_id } = rows[0];
+        const { spot_id, mall_id, end_time, penalty_paid } = rows[0];
+        const now = new Date();
+        const end = new Date(end_time);
 
+        // ⛔ TIME EXCEEDED & NOT PAID
+        if (now > end && penalty_paid === 0) {
+            return res.json({
+                success: false,
+                forcePenalty: true,
+                message: "Parking time exceeded. Penalty payment required."
+            });
+        }
+
+        // ✅ NORMAL LEAVE
         const completeSql = `
-      UPDATE reservations
-      SET status = 'completed'
-      WHERE id = ?
-    `;
+            UPDATE reservations
+            SET status = 'completed'
+            WHERE id = ?
+        `;
 
         db.query(completeSql, [reservationId], (err2) => {
-            if (err2) return res.json({ success: false, error: err2 });
+            if (err2) {
+                return res.json({ success: false, error: err2 });
+            }
 
-            const freeSql = `
-        UPDATE parking_spots
-        SET isAvailable = 1
-        WHERE id = ?
-      `;
+            db.query(
+                "UPDATE parking_spots SET isAvailable = 1 WHERE id = ?",
+                [spot_id],
+                async (err3) => {
+                    if (err3) {
+                        return res.json({ success: false, error: err3 });
+                    }
 
-            db.query(freeSql, [spot_id], async (err3) => {
-                if (err3) return res.json({ success: false, error: err3 });
+                    // ESP32 trigger
+                    if (isEspTarget(spot_id, mall_id)) {
+                        await triggerEsp32("leave");
+                    }
 
-                //ESP32 hook ONLY for Mall A spotId 17
-                if (isEspTarget(spot_id, mall_id)) {
-                    await triggerEsp32("leave");
+                    res.json({
+                        success: true,
+                        message: "Parking session completed."
+                    });
                 }
+            );
+        });
 
-                res.json({
-                    success: true,
-                    message: "Parking session completed. Spot is now available.",
-                });
-            });
+    });
+});
+
+app.post("/payPenalty", (req, res) => {
+    const { reservationId } = req.body;
+
+    const sql = `
+        UPDATE reservations
+        SET penalty_paid = 1
+        WHERE id = ?
+    `;
+
+    db.query(sql, [reservationId], (err) => {
+        if (err) return res.json({ success: false });
+
+        res.json({
+            success: true,
+            message: "Penalty paid successfully"
         });
     });
 });
