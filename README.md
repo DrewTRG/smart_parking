@@ -37,10 +37,10 @@ smart_parking/
 
 ## ⚙️ Technologies Used
 
-- Frontend: Flutter / Web Framework
-- Backend: Node.js / REST API
-- Database: Firebase / SQL / NoSQL
-- Hardware (optional): ESP32 / Sensors
+- Frontend: Flutter
+- Backend: Node.js
+- Database: MySQL
+- Hardware (optional): ESP32
 
 ---
 
@@ -51,15 +51,21 @@ smart_parking/
 git clone https://github.com/DrewTRG/smart_parking.git
 cd smart_parking
 
+---
+
 2. Backend Setup
 cd backend
 npm install
 npm start
 
+---
+
 3. Frontend Setup
 cd frontend
 flutter pub get
 flutter run
+
+---
 
 🧪 Usage
 
