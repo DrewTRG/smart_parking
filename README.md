@@ -23,9 +23,13 @@ Finding parking spaces in crowded areas is time-consuming and inefficient. This 
 ## 🧱 Project Structure
 
 smart_parking/
+
 ├── frontend/ # Application UI
+
 ├── backend/ # Server-side logic and APIs
+
 ├── .gitignore
+
 └── README.md
 
 
