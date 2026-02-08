@@ -46,7 +46,7 @@ smart_parking/
 
 ## 🚀 Getting Started
 
-### 1. Clone the Repository
+## 1. Clone the Repository
 git clone https://github.com/DrewTRG/smart_parking.git
 cd smart_parking
 
@@ -63,7 +63,7 @@ npm start
 ---
 
 3. Frontend Setup
-   
+
 cd frontend
 
 flutter pub get
