@@ -74,7 +74,11 @@ flutter run
 
 ## 🧪 Usage
 
+Start Apache & MySql
+
 Launch the application
+
+Create new account
 
 View available parking spaces
 
