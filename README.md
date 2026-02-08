@@ -47,7 +47,6 @@ smart_parking/
 ## 🚀 Getting Started
 
 ### 1. Clone the Repository
-```bash
 git clone https://github.com/DrewTRG/smart_parking.git
 cd smart_parking
 
@@ -67,7 +66,7 @@ flutter run
 
 ---
 
-🧪 Usage
+##🧪 Usage
 
 Launch the application
 
@@ -77,7 +76,9 @@ Reserve or monitor parking status
 
 Admin can manage parking slots through the system
 
-🎯 Project Objectives
+---
+
+##🎯 Project Objectives
 
 Reduce time spent searching for parking
 
