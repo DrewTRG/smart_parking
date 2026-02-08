@@ -5,12 +5,15 @@ Smart Parking System is a final year project that implements an intelligent park
 📌 Features
 
 ✔ Real-time parking status display
+
 ✔ User-friendly web/mobile frontend UI
+
 ✔ Backend APIs for parking space data
+
 ✔ Support for sensor or image-based parking detection (if applicable — update this)
+
 ✔ Authentication & role-based access (if applicable — update this)
 
-Add more features relevant to your implementation here.
 
 🔧 Requirements
 
