@@ -53,15 +53,21 @@ cd smart_parking
 ---
 
 2. Backend Setup
+
 cd backend
+
 npm install
+
 npm start
 
 ---
 
 3. Frontend Setup
+   
 cd frontend
+
 flutter pub get
+
 flutter run
 
 ---
