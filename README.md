@@ -52,7 +52,7 @@ cd smart_parking
 
 ---
 
-2. Backend Setup
+## 2. Backend Setup
 
 cd backend
 
@@ -62,7 +62,7 @@ npm start
 
 ---
 
-3. Frontend Setup
+## 3. Frontend Setup
 
 cd frontend
 
@@ -72,7 +72,7 @@ flutter run
 
 ---
 
-##🧪 Usage
+## 🧪 Usage
 
 Launch the application
 
@@ -84,7 +84,7 @@ Admin can manage parking slots through the system
 
 ---
 
-##🎯 Project Objectives
+## 🎯 Project Objectives
 
 Reduce time spent searching for parking
 
